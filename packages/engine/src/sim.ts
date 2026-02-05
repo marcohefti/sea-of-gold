@@ -77,9 +77,48 @@ const TAX_RELIEF_PERK_DURATION_MS = 10 * 60_000;
 const TAX_RELIEF_TAX_DISCOUNT_BPS = 200;
 const TUTORIAL_STEP_DOCK_INTRO = "tut:dock_intro";
 const TUTORIAL_STEP_ECONOMY_INTRO = "tut:economy_intro";
+const TUTORIAL_STEP_PORT_CORE = "tut:port_core";
 const DOCK_WORK_DURATION_MS = 5000;
 const DOCK_WORK_REWARD_GOLD = 5n;
+const DOCK_WORK_IMMEDIATE_GOLD = 1n;
+const DOCK_WORK_COMPLETION_GOLD = DOCK_WORK_REWARD_GOLD - DOCK_WORK_IMMEDIATE_GOLD;
+const DOCK_WORK_HUSTLE_REDUCE_MS = 500; // click during a shift to reduce remaining time (min 1ms; reward remains time-based)
 const DOCK_AUTOMATE_COST_GOLD = 30n;
+
+const CHART_LOCKED_ROUTE_IDS = new Set(Object.values(CHART_BY_ID).map((c) => c.routeId));
+
+function addUnlockIds(unlocks: string[], ids: string[]): string[] {
+  if (ids.length === 0) return unlocks;
+  const seen = new Set(unlocks);
+  let changed = false;
+  const next = [...unlocks];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    next.push(id);
+    seen.add(id);
+    changed = true;
+  }
+  return changed ? next : unlocks;
+}
+
+function unlockRoutesForPort(unlocks: string[], portId: string): string[] {
+  const ids: string[] = [];
+  for (const rt of Object.values(ROUTE_BY_ID)) {
+    if (rt.fromIslandId !== portId) continue;
+    if (CHART_LOCKED_ROUTE_IDS.has(rt.id)) continue;
+    ids.push(`route:${rt.id}`);
+  }
+  ids.sort();
+  return addUnlockIds(unlocks, ids);
+}
+
+function applyVoyageCollectUnlocks(unlocks: string[], routeId: string, arrivalPortId: string): string[] {
+  let next = unlockRoutesForPort(unlocks, arrivalPortId);
+  if (routeId === "starter_run") {
+    next = addUnlockIds(next, ["minigame:rigging", "recipe:forge_cannonballs"]);
+  }
+  return next;
+}
 
 function hasBuff(state: GameState, id: string): BuffState | undefined {
   return state.buffs.find((b) => b.id === id);
@@ -181,6 +220,14 @@ export function getDockGoldPerSecForUi(): bigint {
   return DOCK_GOLD_PER_SEC;
 }
 
+export function getDockWorkDurationMsForUi(): number {
+  return DOCK_WORK_DURATION_MS;
+}
+
+export function getDockWorkHustleReduceMsForUi(): number {
+  return DOCK_WORK_HUSTLE_REDUCE_MS;
+}
+
 export function getDockPassiveGoldPerSecForUi(state: GameState): bigint {
   return state.dock.passiveEnabled ? DOCK_GOLD_PER_SEC : 0n;
 }
@@ -194,7 +241,7 @@ export function getTutorialStepIdForUi(state: GameState): string {
 }
 
 export function isDockWorkManualAvailableForUi(state: GameState): boolean {
-  return state.mode === "port" && state.dock.workRemainingMs <= 0;
+  return state.mode === "port";
 }
 
 export function getCrewHireCostGoldForUi(): bigint {
@@ -769,7 +816,7 @@ function tickDockWork(state: GameState, dtMs: number): GameState {
   if (nextRemaining > 0) return { ...state, dock: { ...state.dock, workRemainingMs: nextRemaining } };
   return {
     ...state,
-    resources: { ...state.resources, gold: state.resources.gold + DOCK_WORK_REWARD_GOLD },
+    resources: { ...state.resources, gold: state.resources.gold + DOCK_WORK_COMPLETION_GOLD },
     dock: { ...state.dock, workRemainingMs: 0 },
   };
 }
@@ -1341,21 +1388,10 @@ function startVoyageRuntime(state: GameState, rt: ShipRuntimeState, routeId: str
 function collectVoyageRuntime(state: GameState, rt: ShipRuntimeState): { state: GameState; rt: ShipRuntimeState } {
   if (rt.voyage.status !== "completed") return { state, rt };
   const routeId = rt.voyage.routeId;
-
-  let nextUnlocks = state.unlocks;
-  if (routeId === "starter_run" && !state.unlocks.includes("route:home_to_haven")) {
-    nextUnlocks = [
-      ...state.unlocks,
-      "route:turtle_to_home",
-      "route:home_to_haven",
-      "route:cay_to_haven",
-      "route:haven_to_home",
-      "route:haven_to_cay",
-      "recipe:forge_cannonballs",
-      "recipe:craft_parts",
-      "recipe:assemble_repair_kits",
-    ];
+  if (!routeId) {
+    return { state, rt: { ...rt, voyage: makeIdleVoyageState() } };
   }
+  const nextUnlocks = applyVoyageCollectUnlocks(state.unlocks, routeId, rt.locationId);
 
   const controllerFlagId = getPortControllerFlagId(state, rt.locationId) ?? state.politics.affiliationFlagId;
   const nextInfluenceByFlagId = {
@@ -1585,23 +1621,34 @@ function tickUnlocks(state: GameState): GameState {
   if (s.tutorial.stepId === TUTORIAL_STEP_DOCK_INTRO && (s.dock.passiveEnabled || s.unlocks.includes("upgrade:auto_dockwork"))) {
     s = { ...s, tutorial: { ...s.tutorial, stepId: TUTORIAL_STEP_ECONOMY_INTRO } };
   }
+  if (s.tutorial.stepId === TUTORIAL_STEP_ECONOMY_INTRO && s.economy.contracts.length > 0) {
+    s = { ...s, tutorial: { ...s.tutorial, stepId: TUTORIAL_STEP_PORT_CORE } };
+  }
 
-  // Tutorial-gated Phase 0: start manual-only, then unlock “automation + economy + cannon + starter voyage”.
+  // Phase 0: after buying Dock Automation, unlock Economy first (avoid “unlock avalanches”).
   if (s.dock.passiveEnabled || s.unlocks.includes("upgrade:auto_dockwork")) {
     s = unlockIfMissing(s, "economy");
+  }
+
+  // Phase 0: after the first contract is placed, unlock the first active accelerator + distillery.
+  if (s.unlocks.includes("economy") && s.economy.contracts.length > 0) {
     s = unlockIfMissing(s, "minigame:cannon");
-    s = unlockIfMissing(s, "route:starter_run");
     s = unlockIfMissing(s, "recipe:distill_rum");
   }
 
   // Phase 1: crew after first meaningful cash milestone.
-  if (s.resources.gold >= 25n) s = unlockIfMissing(s, "crew");
+  if (s.unlocks.includes("economy") && s.economy.contracts.length > 0 && s.resources.gold >= 25n) {
+    s = unlockIfMissing(s, "crew");
+  }
 
   // Phase 1: voyages after the player has produced any rum (shows the module once it matters).
   const hereWh = getWarehouse(s, s.location.islandId);
   const rumInWarehouse = hereWh ? hereWh.inv.rum : 0n;
   const rumInHold = s.storage.shipHold.inv.rum;
-  if (rumInWarehouse + rumInHold > 0n) s = unlockIfMissing(s, "voyage");
+  if (rumInWarehouse + rumInHold > 0n) {
+    s = unlockIfMissing(s, "voyage");
+    s = unlockIfMissing(s, "route:starter_run");
+  }
 
   // Phase 2: politics after the first successful voyage (arrival at a non-home port).
   // Also unlocks once the player can afford a meaningful donation sink.
@@ -1744,8 +1791,15 @@ export function applyAction(state: GameState, action: GameAction): GameState {
     }
     case "DOCK_WORK_START": {
       if (state.mode !== "port") return state;
-      if (state.dock.workRemainingMs > 0) return state;
-      return { ...state, dock: { ...state.dock, workRemainingMs: DOCK_WORK_DURATION_MS } };
+      if (state.dock.workRemainingMs > 0) {
+        const reduced = Math.max(1, state.dock.workRemainingMs - DOCK_WORK_HUSTLE_REDUCE_MS);
+        return { ...state, dock: { ...state.dock, workRemainingMs: reduced } };
+      }
+      return {
+        ...state,
+        resources: { ...state.resources, gold: state.resources.gold + DOCK_WORK_IMMEDIATE_GOLD },
+        dock: { ...state.dock, workRemainingMs: DOCK_WORK_DURATION_MS },
+      };
     }
     case "DOCK_AUTOMATE_BUY": {
       if (state.mode !== "port") return state;
@@ -1753,10 +1807,8 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       if (state.resources.gold < DOCK_AUTOMATE_COST_GOLD) return state;
       const nextGold = state.resources.gold - DOCK_AUTOMATE_COST_GOLD;
       const unlocks = state.unlocks.includes("upgrade:auto_dockwork") ? state.unlocks : [...state.unlocks, "upgrade:auto_dockwork"];
-      // Buying automation is a deliberate tutorial milestone. Also unlock the first vertical slice systems immediately.
-      const nextUnlocks = unlocks
-        .concat(["economy", "minigame:cannon", "route:starter_run", "recipe:distill_rum"])
-        .filter((u, idx, arr) => arr.indexOf(u) === idx);
+      // Buying automation is a deliberate tutorial milestone. Unlock Economy next (avoid unlock avalanches).
+      const nextUnlocks = unlocks.includes("economy") ? unlocks : [...unlocks, "economy"];
       return {
         ...state,
         resources: { ...state.resources, gold: nextGold },
@@ -2116,21 +2168,7 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       if (state.mode !== "port") return state;
       if (state.voyage.status !== "completed") return state;
       const routeId = state.voyage.routeId;
-  let nextUnlocks = state.unlocks;
-  if (routeId === "starter_run" && !state.unlocks.includes("route:home_to_haven")) {
-    nextUnlocks = [
-      ...state.unlocks,
-      "route:turtle_to_home",
-      "route:home_to_haven",
-      "route:cay_to_haven",
-      "route:haven_to_home",
-      "route:haven_to_cay",
-      "minigame:rigging",
-      "recipe:forge_cannonballs",
-      "recipe:craft_parts",
-      "recipe:assemble_repair_kits",
-    ];
-  }
+      const nextUnlocks = routeId ? applyVoyageCollectUnlocks(state.unlocks, routeId, state.location.islandId) : state.unlocks;
       const controllerFlagId = getPortControllerFlagId(state, state.location.islandId) ?? state.politics.affiliationFlagId;
       const nextInfluenceByFlagId = {
         ...state.politics.influenceByFlagId,

@@ -7,6 +7,7 @@ Read `acceptance.md` first. If `concept.md` and `acceptance.md` conflict, follow
 - Use the `develop-idle-game` skill workflow (deterministic simulation + Playwright harness).
 - Create/update `progress.md` (keep `Original prompt:` at the top).
 - After each meaningful change: run the Playwright harness, inspect artifacts, and fix the first failing expectation or new console error before continuing.
+- Before declaring anything “done”: ensure all `acceptance.md` scenarios pass, including the product-quality gates in `QUALITY_GATES.md` (`ui_overwhelm_guard`, `progression_manual_to_auto`, `quality_no_dead_time_early`, `quality_unlock_avalanche_guard`).
 
 ## Dev Server Port Policy (mandatory)
 

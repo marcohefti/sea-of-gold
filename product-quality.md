@@ -4,6 +4,8 @@ This document exists to prevent two early-game regressions from silently returni
 
 1) **Overwhelm at game start** (too many visible screens/options immediately)
 2) **Broken manual → automation beat** (passive gold from frame 1)
+3) **Dead time / no agency** (forced waiting where the player can’t meaningfully act)
+4) **Unlock avalanche / overwhelm spike** (one purchase unlocks too many controls at once)
 
 All checks below are **deterministic** and verified via the Playwright harness.
 
@@ -34,9 +36,9 @@ These thresholds are enforced by `ui_overwhelm_guard`.
 ### Phase 1: After buying Dock Automation (`tut:economy_intro` and beyond)
 
 **What should unlock**
-- Economy navigation and contracts loop
-- Cannon Volley entry point
-- Starter voyage route entry (via unlocks), once voyage itself is unlocked by the engine ladder
+- Economy navigation and a lightweight contracts intro (one new lane at a time)
+- Cannon Volley and distilling unlock **after placing the first contract** (to avoid an unlock avalanche)
+- Voyages unlock once you have Rum available (engine ladder), which then unlocks starter routes
 
 **Guideline**
 - Prefer **unlocking one new screen at a time**, and avoid introducing multiple new sinks + generators simultaneously.
@@ -69,6 +71,49 @@ Required scenario: `progression_manual_to_auto`
 - Confirms gold does **not** increase under `advanceTime` alone
 - Confirms the manual action increases gold deterministically
 - Confirms buying the first automation upgrade makes gold increase under `advanceTime` without additional clicks
+
+## No Dead Time / Agency Gate
+
+### Definition
+
+In the early tutorial, the player must always have at least one meaningful action available. Cooldowns must not create “click → wait → nothing” loops.
+
+### Deterministic signals
+
+From `render_game_to_text()`:
+- `quality.pacing.meaningfulActionCount`
+- `quality.pacing.timeToNextMeaningfulActionMs`
+- `quality.pacing.manualActionCooldownMs`
+- `quality.pacing.manualActionImmediateReward`
+
+### How to test it
+
+Scenario: `quality_no_dead_time_early`
+- Asserts `meaningfulActionCount >= 1` and `timeToNextMeaningfulActionMs == 0` at `tut:dock_intro`
+- Clicks the manual action and asserts immediate reward is visible (`resources.gold > 0`)
+
+## Unlock Avalanche Guard
+
+### Definition
+
+A single unlock/purchase must not explode the UI. Unlocks should be staged (one new lane at a time), with locked modules summarized.
+
+### Deterministic signals
+
+From `render_game_to_text()`:
+- `quality.ui.lastUnlockDeltaModules`
+- `quality.ui.lastUnlockDeltaInteractives`
+- `quality.ui.visibleModuleCount`
+- `quality.ui.visibleInteractiveCount`
+
+### How to test it
+
+Scenario: `quality_unlock_avalanche_guard`
+- After buying Dock Automation, asserts unlock deltas and visible counts stay under caps:
+  - `lastUnlockDeltaModules <= 2`
+  - `lastUnlockDeltaInteractives <= 8`
+  - `visibleModuleCount <= 2`
+  - `visibleInteractiveCount <= 30`
 
 ## How to detect overwhelm
 
@@ -111,4 +156,3 @@ Before landing any new module (screen/system), require:
 - Add a harness scenario (or extend an existing one) that asserts:
   - The unlock appears in `unlocks[]` at the right moment, and
   - The module’s key progression outcome changes deterministically under `advanceTime`.
-

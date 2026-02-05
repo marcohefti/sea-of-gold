@@ -121,11 +121,26 @@ async function main() {
     async function reset() {
       await page.evaluate((s) => window.__idle.setSeed(s), seed);
       await page.evaluate(() => window.__idle.hardReset());
+      await page.waitForSelector("[data-testid='start-new-game']", { state: "visible", timeout: 30_000 });
       await page.waitForTimeout(50);
     }
 
     async function click(sel) {
-      await page.click(sel, { timeout: 30_000 });
+      const maxAttempts = 5;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await page.locator(sel).click({ timeout: 30_000 });
+          return;
+        } catch (err) {
+          const msg = String(err?.message || err);
+          const retryable = msg.includes("detached from the DOM");
+          if (retryable && attempt < maxAttempts) {
+            await page.waitForTimeout(100);
+            continue;
+          }
+          throw err;
+        }
+      }
     }
     async function fill(sel, v) {
       await page.fill(sel, String(v));
@@ -135,6 +150,38 @@ async function main() {
     }
     async function advance(ms) {
       await page.evaluate((m) => window.advanceTime(m), ms);
+    }
+
+    async function waitForUnlock(unlockId) {
+      await page.waitForFunction(
+        (id) => {
+          try {
+            const txt = window.render_game_to_text();
+            const st = JSON.parse(txt);
+            return Array.isArray(st?.unlocks) && st.unlocks.includes(id);
+          } catch {
+            return false;
+          }
+        },
+        unlockId,
+        { timeout: 30_000 }
+      );
+    }
+
+    async function startNewGame() {
+      await click("[data-testid='start-new-game']");
+      await page.waitForSelector("[data-testid='work-docks']", { state: "visible", timeout: 30_000 });
+    }
+
+    async function completeDockIntro() {
+      await startNewGame();
+      for (let i = 0; i < 6; i++) {
+        await click("[data-testid='work-docks']");
+        await advance(5_000);
+      }
+      await click("[data-testid='upgrade-auto-dockwork']");
+      await advance(10_000);
+      await page.waitForSelector("[data-testid='nav-economy']", { state: "visible", timeout: 30_000 });
     }
 
     async function exportSave() {
@@ -154,6 +201,15 @@ async function main() {
       await page.evaluate(() => window.__idle.hardReset());
       await importSave(save);
       const after = await readState();
+
+      const validation = await page.evaluate(() =>
+        typeof window.__idle?.validate === "function" ? window.__idle.validate() : null
+      );
+      if (!validation || validation.ok !== true) {
+        const failPath = path.join(outDir, `${name}.validation_failed.json`);
+        fs.writeFileSync(failPath, JSON.stringify({ validation, state: stableKeyState(after) }, null, 2));
+        throw new Error(`Engine validation failed for "${name}" (see ${failPath})`);
+      }
 
       const a = stableKeyState(before);
       const b = stableKeyState(after);
@@ -176,14 +232,19 @@ async function main() {
 
     fixtures.push(
       await makeSnapshot("save_fresh", async () => {
-        await click("[data-testid='start-new-game']");
+        await startNewGame();
+      })
+    );
+
+    fixtures.push(
+      await makeSnapshot("save_after_automation", async () => {
+        await completeDockIntro();
       })
     );
 
     fixtures.push(
       await makeSnapshot("save_after_contracts", async () => {
-        await click("[data-testid='start-new-game']");
-        await advance(12_000);
+        await completeDockIntro();
         await click("[data-testid='nav-economy']");
         await select("[data-testid='contracts-commodity']", "wood");
         await fill("[data-testid='contracts-qty']", "10");
@@ -196,7 +257,15 @@ async function main() {
 
     fixtures.push(
       await makeSnapshot("save_after_cannon", async () => {
-        await click("[data-testid='start-new-game']");
+        await completeDockIntro();
+        await click("[data-testid='nav-economy']");
+        await select("[data-testid='contracts-commodity']", "wood");
+        await fill("[data-testid='contracts-qty']", "1");
+        await fill("[data-testid='contracts-price']", "0");
+        await sleep(100);
+        await click("[data-testid='contracts-place']");
+        await advance(1_000);
+        await waitForUnlock("minigame:cannon");
         await click("[data-testid='minigame-cannon-open']");
         await click("[data-testid='minigame-cannon-start']");
         await advance(25_000);
@@ -205,8 +274,7 @@ async function main() {
 
     fixtures.push(
       await makeSnapshot("save_after_starter_voyage", async () => {
-        await click("[data-testid='start-new-game']");
-        await advance(10_000);
+        await completeDockIntro();
         await click("[data-testid='nav-economy']");
         await select("[data-testid='contracts-commodity']", "sugar");
         await fill("[data-testid='contracts-qty']", "10");
@@ -215,12 +283,11 @@ async function main() {
         await click("[data-testid='contracts-place']");
         await advance(25_000);
         await click("[data-testid='contracts-collect']");
-        await advance(20_000); // distill
-        await click("[data-testid='nav-port']");
-        await select("[data-testid='cargo-commodity']", "rum");
-        await fill("[data-testid='cargo-qty']", "6");
-        await click("[data-testid='cargo-load']");
+        await advance(20_000);
+        await waitForUnlock("voyage");
+        await page.waitForSelector("[data-testid='nav-voyage']", { state: "visible", timeout: 30_000 });
         await click("[data-testid='nav-voyage']");
+        await click("[data-testid='voyage-prepare-starter_run']");
         await click("[data-testid='voyage-start']");
         await advance(35_000);
         await click("[data-testid='voyage-collect']");
@@ -273,4 +340,3 @@ main().catch((err) => {
   process.stderr.write(String(err?.stack || err) + "\n");
   process.exit(1);
 });
-

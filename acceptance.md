@@ -38,8 +38,10 @@ Expose on `window`:
   - `economy`: `{ contracts: Array<{ commodityId: string, qty: string|number, filledQty: string|number, status: string }> }`
   - `buffs`: `Array<{ id: string, remainingMs: number }>`
   - `quality` (product-quality regression detectors):
-    - `quality.ui`: `{ mode, visibleModuleCount, visibleNavCount, primaryActionCount, totalActionCount, tutorialStepId }`
+    - `quality.ui`: `{ mode, visibleModuleCount, visibleNavCount, visibleInteractiveCount, primaryActionCount, totalActionCount, tutorialStepId, lastUnlockDeltaModules, lastUnlockDeltaInteractives }`
     - `quality.progression`: `{ goldPassivePerSec, goldManualActionAvailable, goldManualActionCount, automationUnlocked, nextGoalId }`
+    - `quality.pacing`: `{ manualActionId, manualActionImmediateReward, manualActionCooldownMs, meaningfulActionCount, timeToNextMeaningfulActionMs, idleGoldPerSec }`
+    - `quality.validation`: `{ ok: boolean, errors: string[], warnings: string[] }` (recommended)
 
 2) `window.advanceTime(ms: number): void | Promise<void>`
 - Deterministic stepping; does not depend on real-time rAF progression.
@@ -51,7 +53,8 @@ window.__idle = {
   exportSave(): string,
   importSave(save: string): void,
   hardReset(): void,
-  setSeed(seed: number): void
+  setSeed(seed: number): void,
+  validate?(): { ok: boolean, errors: string[], warnings: string[] }
 }
 ```
 
@@ -140,7 +143,25 @@ AUTO:
 - Expected:
   - Early: `quality.progression.goldPassivePerSec` == `0` and `resources.gold` does not increase under `advanceTime` alone
   - After manual action: `resources.gold` increases deterministically
-  - After buying first automation: `quality.progression.goldPassivePerSec` > `0` and gold increases under `advanceTime` without further manual actions
+- After buying first automation: `quality.progression.goldPassivePerSec` > `0` and gold increases under `advanceTime` without further manual actions
+
+### AC-PQ-003 No dead time (early)
+AUTO:
+- Scenario: `quality_no_dead_time_early`
+- Expected:
+  - `quality.pacing.meaningfulActionCount` >= `1` at `tut:dock_intro`
+  - `quality.pacing.timeToNextMeaningfulActionMs` == `0` at `tut:dock_intro`
+  - `quality.pacing.manualActionCooldownMs` <= `250`
+  - After clicking `[data-testid='work-docks']`: `quality.pacing.manualActionImmediateReward` == `true` and `resources.gold` > `0`
+
+### AC-PQ-004 Unlock avalanche guard
+AUTO:
+- Scenario: `quality_unlock_avalanche_guard`
+- Expected (immediately after buying `[data-testid='upgrade-auto-dockwork']`):
+  - `quality.ui.lastUnlockDeltaModules` <= `2`
+  - `quality.ui.lastUnlockDeltaInteractives` <= `8`
+  - `quality.ui.visibleModuleCount` <= `2`
+  - `quality.ui.visibleInteractiveCount` <= `30`
 
 ## Actions file requirements
 
@@ -148,6 +169,10 @@ The repo must provide `./e2e/action_payloads.json` with scenarios:
 - `smoke`
 - `contracts_basic`
 - `minigame_cannon_basic`
+- `ui_overwhelm_guard`
+- `progression_manual_to_auto`
+- `quality_no_dead_time_early`
+- `quality_unlock_avalanche_guard`
 
 Use the step types supported by the harness (`click`, `fill`, `advance`, `expect`, ...).
 Each scenario must include at least one `expect` that proves progress occurred (not just navigation/clicks).

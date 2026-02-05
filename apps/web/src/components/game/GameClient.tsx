@@ -9,15 +9,15 @@ import {
   getCannonVolleyRefreshWindowMsForUi,
   getCannonVolleyUiForUi,
   getActiveContractCountForPortForUi,
-  getContractPlacementFeeForUi,
   getContractPlacementFeeForUiWithBid,
   getContractMaxActivePerPortForUi,
   getConquestRequirementsForUi,
   getCrewHireCostGoldForUi,
   getCrewWageGoldPerCrewPerMinForUi,
-  getDockGoldPerSecForUi,
   getDockAutomateCostGoldForUi,
   getDockPassiveGoldPerSecForUi,
+  getDockWorkDurationMsForUi,
+  getDockWorkHustleReduceMsForUi,
   getDonationGoldPerInfluenceForUi,
   getEffectivePortTaxBpsForUi,
   getFactionStandingForUi,
@@ -54,7 +54,6 @@ import {
   ROUTES,
   ROUTE_BY_ID,
   SHIP_CLASS_BY_ID,
-  UNLOCK_BY_ID,
   VANITY_ITEMS,
 } from "@sea-of-gold/shared";
 
@@ -66,10 +65,6 @@ import { SAVE_FIXTURES } from "@/lib/saveFixtures";
 import { cn } from "@/lib/utils";
 
 type NavKey = "port" | "economy" | "crew" | "voyage" | "politics";
-
-function unlockHint(id: string, fallback: string): string {
-  return UNLOCK_BY_ID[id]?.hint ?? fallback;
-}
 
 function GoldPill({ gold }: { gold: bigint }) {
   return (
@@ -259,6 +254,13 @@ function DockIntroPanel({
   const automateCost = getDockAutomateCostGoldForUi();
   const canWork = isDockWorkManualAvailableForUi(state);
   const canBuyAutomation = !state.dock.passiveEnabled && state.resources.gold >= automateCost;
+  const workDurationMs = getDockWorkDurationMsForUi();
+  const hustleReduceMs = getDockWorkHustleReduceMsForUi();
+  const working = state.dock.workRemainingMs > 0;
+  const workProgressPct =
+    working && workDurationMs > 0
+      ? Math.max(0, Math.min(1, 1 - state.dock.workRemainingMs / workDurationMs))
+      : 0;
 
   return (
     <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
@@ -287,11 +289,20 @@ function DockIntroPanel({
         <div className="grid gap-2 rounded-md border border-zinc-800 bg-black p-3">
           <div className="text-sm font-medium text-zinc-100">Work the docks</div>
           <div className="text-xs text-zinc-500">
-            Start a short shift to earn your first gold. Gold will not increase unless you work or automate.
+            Start a short shift to earn your first gold. Gold will not increase unless you work or automate.{" "}
+            <span className="text-zinc-400">Tip:</span> while a shift is running, click{" "}
+            <span className="text-zinc-200">Hustle</span> to finish sooner (same pay).
           </div>
+          {working ? (
+            <div className="mt-1 h-2 w-full overflow-hidden rounded-full border border-zinc-800 bg-zinc-950">
+              <div className="h-full bg-emerald-500/70" style={{ width: `${Math.round(workProgressPct * 100)}%` }} />
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <Button data-testid="work-docks" onClick={onWork} disabled={!canWork}>
-              {state.dock.workRemainingMs > 0 ? `Working… ${formatDurationCompact(state.dock.workRemainingMs)}` : "Work shift"}
+              {working
+                ? `Hustle (+${(hustleReduceMs / 1000).toFixed(1)}s) · ${formatDurationCompact(state.dock.workRemainingMs)}`
+                : "Work shift"}
             </Button>
           </div>
         </div>
@@ -300,7 +311,7 @@ function DockIntroPanel({
           <div className="text-sm font-medium text-zinc-100">Automate dockwork</div>
           <div className="text-xs text-zinc-500">
             Cost: <span className="tabular-nums text-zinc-200">{automateCost.toString(10)}g</span>. Enables passive gold
-            and unlocks Economy + Cannon Volley + Starter Run.
+            and unlocks Economy. More systems unlock as you place contracts and produce Rum.
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -321,6 +332,29 @@ function DockIntroPanel({
                 more gold.
               </div>
             ) : null}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EconomyIntroPanel({ onOpenEconomy }: { onOpenEconomy: () => void }) {
+  return (
+    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
+      <CardHeader>
+        <CardTitle>Next: Economy</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <div className="text-sm text-zinc-300">
+          Place <span className="text-zinc-200">contracts</span> for commodities. Fills happen deterministically over time and
+          collected goods land in your <span className="text-zinc-200">warehouse</span>.
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={onOpenEconomy}>Open Economy</Button>
+          <div className="text-xs text-zinc-500">
+            Tip: place your first contract to unlock <span className="text-zinc-200">Cannon Volley</span> and the{" "}
+            <span className="text-zinc-200">Distillery</span>.
           </div>
         </div>
       </CardContent>
@@ -912,7 +946,6 @@ function RiggingPanel({
   const ui = getRiggingRunUiForUi(mg.status === "running" ? mg.elapsedMs : 0, mg.zoneStartPermille);
   const widthPermille = ui.widthPermille;
   const phasePermille = ui.phasePermille;
-  const zoneEnd = ui.zoneEndPermille;
   const inZone = mg.status === "running" && ui.inZone;
   const phasePct = Math.round((phasePermille / 10) * 10) / 10;
   const zoneStartPct = mg.zoneStartPermille / 10;
@@ -2698,6 +2731,14 @@ export default function GameClient() {
   const perkHere = state.politics.portPerksByIslandId[portId] ?? null;
   const tutorialStepId = state.tutorial.stepId;
   const inDockIntro = tutorialStepId === "tut:dock_intro";
+  const inEconomyIntro = tutorialStepId === "tut:economy_intro";
+  const hasCrafting =
+    state.unlocks.includes("recipe:forge_cannonballs") ||
+    state.unlocks.includes("recipe:craft_parts") ||
+    state.unlocks.includes("recipe:assemble_repair_kits") ||
+    state.unlocks.includes("recipe:brew_dye") ||
+    state.unlocks.includes("recipe:weave_cloth") ||
+    state.unlocks.includes("recipe:tailor_cosmetics");
 
   return (
     <div className="min-h-screen bg-black text-zinc-100">
@@ -2768,56 +2809,68 @@ export default function GameClient() {
                   Economy
                 </NavButton>
               ) : null}
-              {state.unlocks.includes("crew") ? (
-                <NavButton active={activeNav === "crew"} testId="nav-crew" onClick={() => setActiveNav("crew")}>
-                  Crew
-                </NavButton>
-              ) : null}
-              {state.unlocks.includes("voyage") ? (
-                <NavButton active={activeNav === "voyage"} testId="nav-voyage" onClick={() => setActiveNav("voyage")}>
-                  Voyage
-                </NavButton>
-              ) : null}
-              {state.unlocks.includes("politics") ? (
-                <NavButton active={activeNav === "politics"} testId="nav-politics" onClick={() => setActiveNav("politics")}>
-                  Politics
-                </NavButton>
-              ) : null}
+              {!inEconomyIntro ? (
+                <>
+                  {state.unlocks.includes("crew") ? (
+                    <NavButton active={activeNav === "crew"} testId="nav-crew" onClick={() => setActiveNav("crew")}>
+                      Crew
+                    </NavButton>
+                  ) : null}
+                  {state.unlocks.includes("voyage") ? (
+                    <NavButton active={activeNav === "voyage"} testId="nav-voyage" onClick={() => setActiveNav("voyage")}>
+                      Voyage
+                    </NavButton>
+                  ) : null}
+                  {state.unlocks.includes("politics") ? (
+                    <NavButton
+                      active={activeNav === "politics"}
+                      testId="nav-politics"
+                      onClick={() => setActiveNav("politics")}
+                    >
+                      Politics
+                    </NavButton>
+                  ) : null}
 
-              {state.unlocks.includes("minigame:cannon") || state.unlocks.includes("minigame:rigging") ? (
-                <div className="mt-3 border-t border-zinc-900 pt-3">
-                  {state.unlocks.includes("minigame:cannon") ? (
-                    <Button
-                      data-testid="minigame-cannon-open"
-                      variant="secondary"
-                      className="w-full bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
-                      onClick={() => {
-                        setShowCannon(true);
-                        setShowRigging(false);
-                      }}
-                    >
-                      Cannon Volley
-                    </Button>
+                  {state.unlocks.includes("minigame:cannon") || state.unlocks.includes("minigame:rigging") ? (
+                    <div className="mt-3 border-t border-zinc-900 pt-3">
+                      {state.unlocks.includes("minigame:cannon") ? (
+                        <Button
+                          data-testid="minigame-cannon-open"
+                          variant="secondary"
+                          className="w-full bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
+                          onClick={() => {
+                            setShowCannon(true);
+                            setShowRigging(false);
+                          }}
+                        >
+                          Cannon Volley
+                        </Button>
+                      ) : null}
+                      {state.unlocks.includes("minigame:rigging") ? (
+                        <Button
+                          data-testid="minigame-rigging-open"
+                          variant="secondary"
+                          className="mt-2 w-full bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
+                          onClick={() => {
+                            setShowRigging(true);
+                            setShowCannon(false);
+                          }}
+                        >
+                          Rigging Run
+                        </Button>
+                      ) : null}
+                    </div>
                   ) : null}
-                  {state.unlocks.includes("minigame:rigging") ? (
-                    <Button
-                      data-testid="minigame-rigging-open"
-                      variant="secondary"
-                      className="mt-2 w-full bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
-                      onClick={() => {
-                        setShowRigging(true);
-                        setShowCannon(false);
-                      }}
-                    >
-                      Rigging Run
-                    </Button>
-                  ) : null}
+                </>
+              ) : (
+                <div className="mt-2 text-xs text-zinc-500">
+                  Locked: place your first contract to unlock Crew, minigames, and voyages.
                 </div>
-              ) : null}
+              )}
             </>
           ) : (
             <div className="mt-2 text-xs text-zinc-500">
-              Locked: buy Dock Automation to unlock Economy, minigames, and voyages.
+              Locked: buy Dock Automation to unlock Economy.
             </div>
           )}
         </aside>
@@ -2895,69 +2948,86 @@ export default function GameClient() {
               )}
 
               {!inDockIntro ? (
-                <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
-                  <CardHeader>
-                    <CardTitle>Captain’s Ledger</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-3">
-                    <div className="text-sm text-zinc-300">
-                      Fast-forward deterministically (no real-world time). Useful for testing loops and “offline” simulation.
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                      <div className="sm:col-span-2">
-                        <label className="mb-1 block text-xs text-zinc-400">Minutes</label>
-                        <Input
-                          data-testid="quick-advance-minutes"
-                          value={quickAdvanceMinutes}
-                          onChange={(e) => setQuickAdvanceMinutes(e.target.value)}
-                          inputMode="numeric"
-                          className="border-zinc-800 bg-black text-zinc-100 placeholder:text-zinc-600"
-                        />
-                      </div>
-                      <div className="flex items-end gap-2">
-                        <Button data-testid="quick-advance-go" onClick={quickAdvance}>
-                          Advance
-                        </Button>
-                      </div>
-                    </div>
-                    {quickAdvanceNote ? <div className="text-xs text-zinc-500">{quickAdvanceNote}</div> : null}
-                  </CardContent>
-                </Card>
-              ) : null}
-
-              {!inDockIntro ? (
-                <>
-                  <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
-                    <CardHeader>
-                      <CardTitle>Next Goals</CardTitle>
-                    </CardHeader>
-                    <CardContent className="grid gap-2 text-sm text-zinc-300">
-                      {(() => {
-                        const goals = getNextGoalsForUi(state);
-                        const items = goals.length > 0 ? goals : ["Run voyages, grow influence, and expand your fleet."];
-                        return items.map((g, idx) => (
-                          <div key={idx} className="rounded-md border border-zinc-800 bg-black px-3 py-2">
-                            {g}
+                inEconomyIntro ? (
+                  <EconomyIntroPanel onOpenEconomy={() => setActiveNav("economy")} />
+                ) : (
+                  <>
+                    {isAutomation ? (
+                      <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
+                        <CardHeader>
+                          <CardTitle>Captain’s Ledger</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-3">
+                          <div className="text-sm text-zinc-300">
+                            Fast-forward deterministically (no real-world time). Useful for testing loops and “offline” simulation.
                           </div>
-                        ));
-                      })()}
-                    </CardContent>
-                  </Card>
-                  <WarehousePanel state={state} onUpgrade={warehouseUpgrade} />
-                  <ShipHoldPanel state={state} onLoad={loadToHold} onUnload={unloadFromHold} />
-                  <ShipPanel state={state} onRepair={shipRepair} />
-                  <ShipyardPanel state={state} onBuy={shipBuyClass} onUpgrade={shipyardUpgrade} />
-                  <FleetPanel
-                    state={state}
-                    onBuyShip={fleetBuyShip}
-                    onSetActive={fleetSetActive}
-                    onSetAutomation={fleetSetAutomation}
-                  />
-                  <FlagshipPanel state={state} onContribute={flagshipContribute} />
-                  <DistilleryPanel state={state} onSetEnabled={(enabled) => setRecipeEnabled("distill_rum", enabled)} />
-                  <CraftingPanel state={state} onSetEnabled={setRecipeEnabled} />
-                  <VanityShopPanel state={state} onBuy={vanityBuy} />
-                </>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                            <div className="sm:col-span-2">
+                              <label className="mb-1 block text-xs text-zinc-400">Minutes</label>
+                              <Input
+                                data-testid="quick-advance-minutes"
+                                value={quickAdvanceMinutes}
+                                onChange={(e) => setQuickAdvanceMinutes(e.target.value)}
+                                inputMode="numeric"
+                                className="border-zinc-800 bg-black text-zinc-100 placeholder:text-zinc-600"
+                              />
+                            </div>
+                            <div className="flex items-end gap-2">
+                              <Button data-testid="quick-advance-go" onClick={quickAdvance}>
+                                Advance
+                              </Button>
+                            </div>
+                          </div>
+                          {quickAdvanceNote ? <div className="text-xs text-zinc-500">{quickAdvanceNote}</div> : null}
+                        </CardContent>
+                      </Card>
+                    ) : null}
+
+                    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
+                      <CardHeader>
+                        <CardTitle>Next Goals</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid gap-2 text-sm text-zinc-300">
+                        {(() => {
+                          const goals = getNextGoalsForUi(state);
+                          const items = goals.length > 0 ? goals : ["Run voyages, grow influence, and expand your fleet."];
+                          return items.map((g, idx) => (
+                            <div key={idx} className="rounded-md border border-zinc-800 bg-black px-3 py-2">
+                              {g}
+                            </div>
+                          ));
+                        })()}
+                      </CardContent>
+                    </Card>
+
+                    <WarehousePanel state={state} onUpgrade={warehouseUpgrade} />
+                    {state.unlocks.includes("recipe:distill_rum") ? (
+                      <DistilleryPanel state={state} onSetEnabled={(enabled) => setRecipeEnabled("distill_rum", enabled)} />
+                    ) : null}
+                    {state.unlocks.includes("voyage") ? (
+                      <ShipHoldPanel state={state} onLoad={loadToHold} onUnload={unloadFromHold} />
+                    ) : null}
+                    {state.unlocks.includes("voyage") || state.ship.condition < state.ship.maxCondition ? (
+                      <ShipPanel state={state} onRepair={shipRepair} />
+                    ) : null}
+                    {state.unlocks.includes("crew") ? (
+                      <ShipyardPanel state={state} onBuy={shipBuyClass} onUpgrade={shipyardUpgrade} />
+                    ) : null}
+                    {state.fleet.maxShips > 2 || state.fleet.ships.length > 0 ? (
+                      <FleetPanel
+                        state={state}
+                        onBuyShip={fleetBuyShip}
+                        onSetActive={fleetSetActive}
+                        onSetAutomation={fleetSetAutomation}
+                      />
+                    ) : null}
+                    {state.unlocks.includes("politics") || state.flagship.progress > 0 ? (
+                      <FlagshipPanel state={state} onContribute={flagshipContribute} />
+                    ) : null}
+                    {hasCrafting ? <CraftingPanel state={state} onSetEnabled={setRecipeEnabled} /> : null}
+                    {state.unlocks.includes("vanity_shop") ? <VanityShopPanel state={state} onBuy={vanityBuy} /> : null}
+                  </>
+                )
               ) : null}
             </div>
           ) : null}

@@ -4,9 +4,12 @@ import {
   getActiveContractCountForPortForUi,
   getCannonVolleyRefreshWindowMsForUi,
   getContractMaxActivePerPortForUi,
+  getDockAutomateCostGoldForUi,
   getEffectivePortTaxBpsForUi,
   getFactionStandingForUi,
   getDockPassiveGoldPerSecForUi,
+  getDockWorkDurationMsForUi,
+  getDockWorkHustleReduceMsForUi,
   getRiggingRunRefreshWindowMsForUi,
   getTutorialStepIdForUi,
   invUsed,
@@ -104,8 +107,12 @@ export type IdleTextState = {
       mode: string;
       visibleModuleCount: number;
       visibleNavCount: number;
+      visibleInteractiveCount: number;
       primaryActionCount: number;
       totalActionCount: number;
+      lastUnlockDeltaModules: number;
+      lastUnlockDeltaInteractives: number;
+      lastUnlockDeltaUnlockCount: number;
       tutorialStepId: string;
     };
     progression: {
@@ -115,7 +122,23 @@ export type IdleTextState = {
       automationUnlocked: boolean;
       nextGoalId: string;
     };
+    pacing?: {
+      manualActionId: string;
+      manualActionImmediateReward: boolean;
+      manualActionBusyRemainingMs: number;
+      manualActionCooldownMs: number;
+      manualActionHustleReduceMs: number;
+      manualActionDurationMs: number;
+      meaningfulActionCount: number;
+      timeToNextMeaningfulActionMs: number;
+      idleGoldPerSec: string | number;
+    };
     validation?: GameStateValidationReport;
+    debug?: {
+      eventCount: number;
+      lastSeq: number;
+      tail: DebugEvent[];
+    };
   };
   minigameLocks?: { cannonStartBlocked: boolean; riggingStartBlocked: boolean };
   stats?: { voyagesStarted: number };
@@ -254,33 +277,153 @@ function derivedTextMode(state: GameState): string {
 function computeQualityUiCounts(state: GameState, ui: IdleUiText | undefined) {
   const stepId = state.mode === "title" ? "tut:title" : getTutorialStepIdForUi(state);
   const inDockIntro = stepId === "tut:dock_intro";
+  const inEconomyIntro = stepId === "tut:economy_intro";
+  const activeNav = ui?.activeNav ?? "port";
+  const hasOpenMinigame = !!ui?.openMinigame;
 
   const visibleNavIds: string[] = [];
   if (state.mode !== "title") {
     visibleNavIds.push("port");
-    if (!inDockIntro) {
-      if (state.unlocks.includes("economy")) visibleNavIds.push("economy");
+    if (!inDockIntro && state.unlocks.includes("economy")) visibleNavIds.push("economy");
+    if (!inDockIntro && !inEconomyIntro) {
       if (state.unlocks.includes("crew")) visibleNavIds.push("crew");
       if (state.unlocks.includes("voyage")) visibleNavIds.push("voyage");
       if (state.unlocks.includes("politics")) visibleNavIds.push("politics");
     }
   }
 
-  // "Modules" are top-level screens/panels (current nav + optional minigame panel).
-  const visibleModuleCount = state.mode === "title" ? 0 : 1 + (ui?.openMinigame ? 1 : 0);
+  // "Modules" are major cards/panels visible in the main content area (exclude automation-only debug panels).
+  let visibleModuleCount = 0;
+  if (state.mode !== "title") {
+    if (hasOpenMinigame) visibleModuleCount += 1;
+    if (activeNav === "port") {
+      if (inDockIntro) {
+        visibleModuleCount += 1;
+      } else if (inEconomyIntro) {
+        visibleModuleCount += 2; // dock summary + economy intro card
+      } else {
+        const shipPanelVisible = state.unlocks.includes("voyage") || state.ship.condition < state.ship.maxCondition;
+        const fleetVisible = state.fleet.maxShips > 2 || state.fleet.ships.length > 0;
+        const flagshipVisible = state.unlocks.includes("politics") || state.flagship.progress > 0;
+        const hasCrafting =
+          state.unlocks.includes("recipe:forge_cannonballs") ||
+          state.unlocks.includes("recipe:craft_parts") ||
+          state.unlocks.includes("recipe:assemble_repair_kits") ||
+          state.unlocks.includes("recipe:brew_dye") ||
+          state.unlocks.includes("recipe:weave_cloth") ||
+          state.unlocks.includes("recipe:tailor_cosmetics");
+
+        visibleModuleCount +=
+          1 + // dock summary
+          1 + // next goals
+          1 + // warehouse
+          (state.unlocks.includes("recipe:distill_rum") ? 1 : 0) +
+          (state.unlocks.includes("voyage") ? 1 : 0) + // ship hold
+          (shipPanelVisible ? 1 : 0) +
+          (state.unlocks.includes("crew") ? 1 : 0) + // shipyard
+          (fleetVisible ? 1 : 0) +
+          (flagshipVisible ? 1 : 0) +
+          (hasCrafting ? 1 : 0) +
+          (state.unlocks.includes("vanity_shop") ? 1 : 0);
+      }
+    } else if (activeNav === "economy") {
+      visibleModuleCount += 2;
+    } else {
+      visibleModuleCount += 1;
+    }
+  }
 
   // Primary actions = the main CTA buttons intentionally surfaced for the current tutorial phase.
-  const primaryActionCount = inDockIntro ? 2 : 3;
+  const primaryActionCount = inDockIntro ? 2 : inEconomyIntro && activeNav === "port" ? 1 : activeNav === "economy" ? 2 : 0;
 
   // Total actions = primary actions + visible nav buttons (we do not count every minor widget).
   const totalActionCount = primaryActionCount + visibleNavIds.length;
+
+  // Interactive controls = nav + a curated set of major action controls (not every small widget).
+  let visibleInteractiveCount = visibleNavIds.length;
+  if (!inDockIntro && !inEconomyIntro) {
+    if (state.unlocks.includes("minigame:cannon")) visibleInteractiveCount += 1;
+    if (state.unlocks.includes("minigame:rigging")) visibleInteractiveCount += 1;
+  }
+  if (state.mode !== "title") {
+    if (hasOpenMinigame) visibleInteractiveCount += 3; // start/action/close (approx)
+    if (activeNav === "port") {
+      if (inDockIntro) {
+        visibleInteractiveCount += 2; // work + buy automation
+      } else if (inEconomyIntro) {
+        visibleInteractiveCount += 1; // open economy button
+      } else {
+        const shipPanelVisible = state.unlocks.includes("voyage") || state.ship.condition < state.ship.maxCondition;
+        const fleetVisible = state.fleet.maxShips > 2 || state.fleet.ships.length > 0;
+        const flagshipVisible = state.unlocks.includes("politics") || state.flagship.progress > 0;
+        const hasCrafting =
+          state.unlocks.includes("recipe:forge_cannonballs") ||
+          state.unlocks.includes("recipe:craft_parts") ||
+          state.unlocks.includes("recipe:assemble_repair_kits") ||
+          state.unlocks.includes("recipe:brew_dye") ||
+          state.unlocks.includes("recipe:weave_cloth") ||
+          state.unlocks.includes("recipe:tailor_cosmetics");
+
+        visibleInteractiveCount +=
+          1 + // warehouse upgrade
+          (state.unlocks.includes("recipe:distill_rum") ? 1 : 0) + // distillery enable toggle
+          (state.unlocks.includes("voyage") ? 4 : 0) + // ship hold transfer (select + qty + load + unload)
+          (shipPanelVisible ? 1 : 0) + // ship repair
+          (state.unlocks.includes("crew") ? 4 : 0) + // shipyard (upgrade + 3 buy buttons)
+          (fleetVisible ? 3 * (1 + state.fleet.ships.length) + 2 : 0) + // per-ship automation + buy buttons
+          (flagshipVisible ? 1 : 0) + // flagship contribute
+          (hasCrafting ? 6 : 0) + // crafting recipe toggles
+          (state.unlocks.includes("vanity_shop") ? 3 : 0); // vanity shop buy buttons (approx)
+      }
+    } else if (activeNav === "economy") {
+      visibleInteractiveCount += 7; // place form + collect/cancel controls (approx)
+    } else if (activeNav === "crew") {
+      visibleInteractiveCount += 3; // qty + hire + fire
+    } else if (activeNav === "voyage") {
+      visibleInteractiveCount += 4; // prepare/start/collect + chart buy (approx)
+    } else if (activeNav === "politics") {
+      visibleInteractiveCount += 7; // affiliation + donate + campaigns (approx)
+    }
+  }
 
   return {
     stepId,
     visibleNavCount: visibleNavIds.length,
     visibleModuleCount,
+    visibleInteractiveCount,
     primaryActionCount,
     totalActionCount,
+  };
+}
+
+function computeQualityPacing(state: GameState) {
+  const stepId = state.mode === "title" ? "tut:title" : getTutorialStepIdForUi(state);
+  const passivePerSec = getDockPassiveGoldPerSecForUi(state);
+  const manualAvail = isDockWorkManualAvailableForUi(state);
+  const automateCost = getDockAutomateCostGoldForUi();
+  const durationMs = getDockWorkDurationMsForUi();
+  const hustleReduceMs = getDockWorkHustleReduceMsForUi();
+  const canBuyAutomation =
+    state.mode === "port" && stepId === "tut:dock_intro" && !state.dock.passiveEnabled && state.resources.gold >= automateCost;
+
+  const meaningfulActionCount =
+    stepId === "tut:dock_intro" ? (manualAvail ? 1 : 0) + (canBuyAutomation ? 1 : 0) : 1;
+
+  const timeToNextMeaningfulActionMs =
+    meaningfulActionCount > 0 ? 0 : Math.max(0, Math.trunc(state.dock.workRemainingMs));
+
+  const manualActionCooldownMs = manualAvail ? 0 : Math.max(0, Math.trunc(state.dock.workRemainingMs));
+
+  return {
+    manualActionId: "work-docks",
+    manualActionImmediateReward: true,
+    manualActionBusyRemainingMs: Math.max(0, Math.trunc(state.dock.workRemainingMs)),
+    manualActionCooldownMs,
+    manualActionHustleReduceMs: hustleReduceMs,
+    manualActionDurationMs: durationMs,
+    meaningfulActionCount,
+    timeToNextMeaningfulActionMs,
+    idleGoldPerSec: bigintToJsonNumberString(passivePerSec),
   };
 }
 
@@ -302,6 +445,7 @@ function deriveNextGoalId(state: GameState): string {
 function serializeStateForSave(state: GameState) {
   // Save payload stores rng separately for deterministic roundtrips.
   const { rng: _rng, ...rest } = state;
+  void _rng;
   return {
     ...rest,
     resources: {
@@ -419,7 +563,7 @@ export type IdleStore = {
   simulateOfflineCatchup(wallClockDeltaMs: number): void;
   getDebugLog(): DebugEvent[];
   clearDebugLog(): void;
-  validate(): GameStateValidationReport;
+  validate(opts?: { ui?: IdleUiText }): GameStateValidationReport;
   subscribe(listener: Listener): () => void;
   dispatch(action: GameAction): void;
   advanceTime(ms: number): void;
@@ -489,6 +633,16 @@ export function createIdleStore(): IdleStore {
   const DEBUG_LOG_MAX = 200;
   let debugSeq = 0;
   let debugLog: DebugEvent[] = [];
+  const DEFAULT_QUALITY_UI: IdleUiText = {
+    activeNav: "port",
+    openMinigame: null,
+    realtimeEnabled: false,
+    isAutomation: true,
+  };
+  let lastQualityUi: IdleUiText = DEFAULT_QUALITY_UI;
+  let lastUnlockDeltaModules = 0;
+  let lastUnlockDeltaInteractives = 0;
+  let lastUnlockDeltaUnlockCount = 0;
 
   const listeners = new Set<Listener>();
   const emit = () => {
@@ -537,8 +691,43 @@ export function createIdleStore(): IdleStore {
     if (prev.unlocks !== next.unlocks) {
       const prevSet = new Set(prev.unlocks);
       const added = next.unlocks.filter((u) => !prevSet.has(u));
+      lastUnlockDeltaUnlockCount = added.length;
       if (added.length > 0) pushDebug({ kind: "unlock", seq: ++debugSeq, nowMs, added });
     }
+
+    const stepChanged = prev.tutorial.stepId !== next.tutorial.stepId;
+    const unlocksChanged = prev.unlocks !== next.unlocks;
+    if (stepChanged || unlocksChanged) {
+      const before = computeQualityUiCounts(prev, lastQualityUi);
+      const after = computeQualityUiCounts(next, lastQualityUi);
+      lastUnlockDeltaModules = Math.max(0, after.visibleModuleCount - before.visibleModuleCount);
+      lastUnlockDeltaInteractives = Math.max(0, after.visibleInteractiveCount - before.visibleInteractiveCount);
+    }
+  };
+
+  const validateWithQuality = (): GameStateValidationReport => {
+    const base = validateGameStateInvariants({ next: state });
+    const errors = [...base.errors];
+    const warnings = [...base.warnings];
+
+    const pacing = computeQualityPacing(state);
+    if (state.mode !== "title" && state.tutorial.stepId === "tut:dock_intro" && pacing.meaningfulActionCount === 0) {
+      errors.push("Quality gate: dead time — no meaningful actions available in tut:dock_intro.");
+    }
+
+    if (lastUnlockDeltaInteractives > 8) {
+      warnings.push(
+        `Quality gate: unlock spike — +${lastUnlockDeltaInteractives} interactives became visible on the last unlock.`
+      );
+    }
+    if (lastUnlockDeltaModules > 2) {
+      warnings.push(`Quality gate: unlock spike — +${lastUnlockDeltaModules} modules became visible on the last unlock.`);
+    }
+    if (lastUnlockDeltaUnlockCount > 6) {
+      warnings.push(`Quality gate: unlock burst — +${lastUnlockDeltaUnlockCount} unlock IDs granted on the last unlock.`);
+    }
+
+    return { ok: errors.length === 0, errors, warnings };
   };
 
   const store: IdleStore = {
@@ -580,7 +769,7 @@ export function createIdleStore(): IdleStore {
       emit();
     },
     validate() {
-      return validateGameStateInvariants({ next: state });
+      return validateWithQuality();
     },
     subscribe(listener) {
       listeners.add(listener);
@@ -603,6 +792,7 @@ export function createIdleStore(): IdleStore {
       emit();
     },
     renderGameToText(opts) {
+      if (opts?.ui) lastQualityUi = opts.ui;
       const portId = state.location.islandId;
       const island = ISLAND_BY_ID[portId] || { id: portId, name: portId };
       const wh = state.storage.warehouses[portId];
@@ -649,16 +839,22 @@ export function createIdleStore(): IdleStore {
         quality: (() => {
           const ui = opts?.ui;
           const counts = computeQualityUiCounts(state, ui);
+          const pacing = computeQualityPacing(state);
           const passivePerSec = getDockPassiveGoldPerSecForUi(state);
           const manualAvail = isDockWorkManualAvailableForUi(state);
-          const validation = validateGameStateInvariants({ next: state });
+          const validation = validateWithQuality();
+          const tail = debugLog.slice(-8);
           return {
             ui: {
               mode: derivedTextMode(state),
               visibleModuleCount: counts.visibleModuleCount,
               visibleNavCount: counts.visibleNavCount,
+              visibleInteractiveCount: counts.visibleInteractiveCount,
               primaryActionCount: counts.primaryActionCount,
               totalActionCount: counts.totalActionCount,
+              lastUnlockDeltaModules,
+              lastUnlockDeltaInteractives,
+              lastUnlockDeltaUnlockCount,
               tutorialStepId: counts.stepId,
             },
             progression: {
@@ -668,7 +864,13 @@ export function createIdleStore(): IdleStore {
               automationUnlocked: state.dock.passiveEnabled,
               nextGoalId: deriveNextGoalId(state),
             },
+            pacing,
             validation,
+            debug: {
+              eventCount: debugLog.length,
+              lastSeq: debugSeq,
+              tail,
+            },
           };
         })(),
         minigameLocks: {
@@ -873,6 +1075,12 @@ export function createIdleStore(): IdleStore {
     hardReset() {
       state = makeInitialState(seed);
       offlineCatchupReport = null;
+      debugSeq = 0;
+      debugLog = [];
+      lastQualityUi = DEFAULT_QUALITY_UI;
+      lastUnlockDeltaModules = 0;
+      lastUnlockDeltaInteractives = 0;
+      lastUnlockDeltaUnlockCount = 0;
       emit();
     },
     setSeed(nextSeed) {

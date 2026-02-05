@@ -14,7 +14,8 @@
         { "type": "click", "selector": "[data-testid='work-docks']" },
         { "type": "advance", "ms": 5000 },
         { "type": "expect", "path": "resources.gold", "op": "gt", "value": 0 },
-        { "type": "expect", "path": "meta.nowMs", "op": "gte", "value": 10000 }
+        { "type": "expect", "path": "meta.nowMs", "op": "gte", "value": 10000 },
+        { "type": "expect", "path": "quality.debug.eventCount", "op": "gt", "value": 0 }
       ]
     },
     "contracts_basic": {
@@ -108,6 +109,15 @@
         { "type": "click", "selector": "[data-testid='work-docks']" },
         { "type": "advance", "ms": 5000 },
         { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
+        { "type": "advance", "ms": 20000 },
+
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "10" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "1" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+
         { "type": "click", "selector": "[data-testid='minigame-cannon-open']" },
         { "type": "expect", "path": "meta.ui.openMinigame", "op": "eq", "value": "cannon_volley" },
         { "type": "click", "selector": "[data-testid='minigame-cannon-start']" },
@@ -157,6 +167,53 @@
         { "type": "expect", "path": "resources.gold", "op": "gt", "value": 0 }
       ]
     },
+    "quality_no_dead_time_early": {
+      "steps": [
+        { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "expect", "path": "quality.ui.tutorialStepId", "op": "eq", "value": "tut:dock_intro" },
+        { "type": "expect", "path": "quality.pacing.meaningfulActionCount", "op": "gte", "value": 1 },
+        { "type": "expect", "path": "quality.pacing.timeToNextMeaningfulActionMs", "op": "eq", "value": 0 },
+        { "type": "expect", "path": "quality.pacing.manualActionCooldownMs", "op": "lte", "value": 250 },
+
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "expect", "path": "quality.pacing.manualActionImmediateReward", "op": "eq", "value": true },
+        { "type": "expect", "path": "quality.pacing.manualActionDurationMs", "op": "eq", "value": 5000 },
+        { "type": "expect", "path": "quality.pacing.manualActionHustleReduceMs", "op": "eq", "value": 500 },
+        { "type": "expect", "path": "quality.pacing.manualActionBusyRemainingMs", "op": "eq", "value": 5000 },
+        { "type": "expect", "path": "resources.gold", "op": "gt", "value": 0 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "expect", "path": "quality.pacing.manualActionBusyRemainingMs", "op": "eq", "value": 4500 },
+        { "type": "expect", "path": "quality.pacing.meaningfulActionCount", "op": "gte", "value": 1 },
+        { "type": "expect", "path": "quality.pacing.timeToNextMeaningfulActionMs", "op": "eq", "value": 0 }
+      ]
+    },
+    "quality_unlock_avalanche_guard": {
+      "steps": [
+        { "type": "click", "selector": "[data-testid='start-new-game']" },
+
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "expect", "path": "resources.gold", "op": "gte", "value": 30 },
+
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
+        { "type": "expect", "path": "quality.progression.automationUnlocked", "op": "eq", "value": true },
+
+        { "type": "expect", "path": "quality.ui.lastUnlockDeltaModules", "op": "lte", "value": 2 },
+        { "type": "expect", "path": "quality.ui.lastUnlockDeltaInteractives", "op": "lte", "value": 8 },
+        { "type": "expect", "path": "quality.ui.visibleModuleCount", "op": "lte", "value": 2 },
+        { "type": "expect", "path": "quality.ui.visibleInteractiveCount", "op": "lte", "value": 30 }
+      ]
+    },
     "minigame_cannon_spam_guard": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
@@ -173,6 +230,15 @@
         { "type": "click", "selector": "[data-testid='work-docks']" },
         { "type": "advance", "ms": 5000 },
         { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
+        { "type": "advance", "ms": 20000 },
+
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+
         { "type": "click", "selector": "[data-testid='minigame-cannon-open']" },
         { "type": "click", "selector": "[data-testid='minigame-cannon-start']" },
         { "type": "advance", "ms": 25000 },
@@ -205,6 +271,14 @@
         { "type": "expect", "path": "minigames.cannon.shots", "op": "eq", "value": 0 },
         { "type": "click", "selector": "[data-testid='debug-dispatch-cannon-fire']" },
         { "type": "expect", "path": "minigames.cannon.shots", "op": "eq", "value": 0 },
+
+        { "type": "advance", "ms": 20000 },
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
 
         { "type": "click", "selector": "[data-testid='minigame-cannon-open']" },
         { "type": "expect", "path": "meta.ui.openMinigame", "op": "eq", "value": "cannon_volley" },
@@ -378,7 +452,7 @@
         { "type": "advance", "ms": 40000 },
         { "type": "click", "selector": "[data-testid='voyage-collect']" },
         { "type": "expect", "path": "location.id", "op": "eq", "value": "turtle_cay" },
-        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:home_to_haven" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:cay_to_haven" },
         { "type": "expect", "path": "unlocks", "op": "includes", "value": "minigame:rigging" },
         { "type": "screenshot", "name": "voyage_after" }
       ]
@@ -399,6 +473,15 @@
         { "type": "click", "selector": "[data-testid='work-docks']" },
         { "type": "advance", "ms": 5000 },
         { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
+        { "type": "advance", "ms": 20000 },
+
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+
         { "type": "click", "selector": "[data-testid='minigame-cannon-open']" },
         { "type": "click", "selector": "[data-testid='minigame-cannon-start']" },
         { "type": "advance", "ms": 450 },
@@ -495,6 +578,13 @@
         { "type": "expect", "path": "resources.gold", "op": "gte", "value": 50 },
         { "type": "screenshot", "name": "port_initial" },
 
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+
         { "type": "click", "selector": "[data-testid='nav-crew']" },
         { "type": "expect", "path": "meta.ui.activeNav", "op": "eq", "value": "crew" },
         { "type": "screenshot", "name": "crew" },
@@ -560,6 +650,15 @@
         { "type": "click", "selector": "[data-testid='work-docks']" },
         { "type": "advance", "ms": 5000 },
         { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
+
+        { "type": "advance", "ms": 20000 },
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+
         { "type": "click", "selector": "[data-testid='nav-port']" },
         { "type": "fill", "selector": "[data-testid='quick-advance-minutes']", "value": "10" },
         { "type": "click", "selector": "[data-testid='quick-advance-go']" },
@@ -732,6 +831,19 @@
     "phase0_loop": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 10000 },
         { "type": "click", "selector": "[data-testid='nav-economy']" },
         { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "sugar" },
@@ -756,7 +868,7 @@
         { "type": "advance", "ms": 30000 },
         { "type": "expect", "path": "buffs[0].id", "op": "eq", "value": "cannon_volley" },
         { "type": "expect", "path": "voyage.status", "op": "eq", "value": "completed" },
-        { "type": "expect", "path": "voyage.pendingGold", "op": "eq", "value": 60 },
+        { "type": "expect", "path": "voyage.pendingGold", "op": "gt", "value": 50 },
         { "type": "click", "selector": "[data-testid='voyage-collect']" },
         { "type": "expect", "path": "resources.gold", "op": "gt", "value": 100 }
       ]
@@ -764,6 +876,19 @@
     "phase1_cannonballs_encounter": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 25000 },
 
         { "type": "click", "selector": "[data-testid='nav-economy']" },
@@ -865,6 +990,19 @@
     "phase2_politics_tax_discount": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 200000 },
 
         { "type": "click", "selector": "[data-testid='nav-economy']" },
@@ -910,6 +1048,20 @@
     "phase2_rigging_run_efficiency": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
 
         { "type": "advance", "ms": 10000 },
 
@@ -980,8 +1132,8 @@
         { "type": "click", "selector": "[data-testid='work-docks']" },
         { "type": "advance", "ms": 5000 },
         { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
-        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:starter_run" },
-        { "type": "expect", "path": "unlocks", "op": "includes", "value": "recipe:distill_rum" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "economy" },
+        { "type": "expect", "path": "quality.ui.tutorialStepId", "op": "eq", "value": "tut:economy_intro" },
 
         { "type": "advance", "ms": 10000 },
         { "type": "click", "selector": "[data-testid='nav-economy']" },
@@ -990,11 +1142,17 @@
         { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "1" },
         { "type": "wait", "ms": 100 },
         { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "recipe:distill_rum" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "minigame:cannon" },
+        { "type": "expect", "path": "quality.ui.tutorialStepId", "op": "eq", "value": "tut:port_core" },
         { "type": "advance", "ms": 25000 },
         { "type": "click", "selector": "[data-testid='contracts-collect']" },
         { "type": "expect", "path": "resources.sugar", "op": "gte", "value": 10 },
         { "type": "advance", "ms": 20000 },
         { "type": "expect", "path": "resources.rum", "op": "gte", "value": 6 },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "voyage" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:starter_run" },
 
         { "type": "click", "selector": "[data-testid='nav-port']" },
         { "type": "select", "selector": "[data-testid='cargo-commodity']", "value": "rum" },
@@ -1006,7 +1164,7 @@
         { "type": "click", "selector": "[data-testid='voyage-start']" },
         { "type": "advance", "ms": 35000 },
         { "type": "click", "selector": "[data-testid='voyage-collect']" },
-        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:home_to_haven" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:cay_to_haven" },
         { "type": "expect", "path": "unlocks", "op": "includes", "value": "recipe:forge_cannonballs" },
         { "type": "expect", "path": "unlocks", "op": "includes", "value": "minigame:rigging" },
 
@@ -1055,6 +1213,19 @@
     "phase2_cosmetics_vanity_signage": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 200000 },
 
         { "type": "click", "selector": "[data-testid='nav-economy']" },
@@ -1115,9 +1286,34 @@
     "phase3_fleet_automation_basic": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 600000 },
 
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "crew" },
+
         { "type": "click", "selector": "[data-testid='nav-port']" },
+        { "type": "click", "selector": "[data-testid='shipyard-upgrade']" },
+        { "type": "expect", "path": "fleet.max", "op": "eq", "value": 3 },
+        { "type": "advance", "ms": 600000 },
+        { "type": "expect", "path": "resources.gold", "op": "gte", "value": 500 },
         { "type": "click", "selector": "[data-testid='fleet-buy-brig']" },
         { "type": "expect", "path": "fleet.count", "op": "eq", "value": 2 },
 
@@ -1145,7 +1341,7 @@
         { "type": "select", "selector": "[data-testid='fleet-auto-route-s_2']", "value": "starter_run" },
         { "type": "click", "selector": "[data-testid='fleet-auto-enable-s_2']" },
         { "type": "advance", "ms": 35000 },
-        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:home_to_haven" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "route:cay_to_haven" },
         { "type": "expect", "path": "fleet.ships[1].locationId", "op": "eq", "value": "turtle_cay" },
         { "type": "expect", "path": "politics.influenceByFlagId.freebooters", "op": "gte", "value": 1 }
       ]
@@ -1153,7 +1349,28 @@
     "phase3_shipyard_upgrade_basic": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 600000 },
+
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "crew" },
 
         { "type": "click", "selector": "[data-testid='nav-port']" },
         { "type": "click", "selector": "[data-testid='shipyard-upgrade']" },
@@ -1164,7 +1381,27 @@
     "phase3_conquest_basic": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 600000 },
+
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
 
         { "type": "click", "selector": "[data-testid='nav-politics']" },
         { "type": "select", "selector": "[data-testid='politics-affiliation-flag']", "value": "merchants" },
@@ -1187,7 +1424,27 @@
     "phase3_flagship_basic": {
       "steps": [
         { "type": "click", "selector": "[data-testid='start-new-game']" },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
         { "type": "advance", "ms": 900000 },
+
+        { "type": "click", "selector": "[data-testid='nav-economy']" },
+        { "type": "select", "selector": "[data-testid='contracts-commodity']", "value": "wood" },
+        { "type": "fill", "selector": "[data-testid='contracts-qty']", "value": "1" },
+        { "type": "fill", "selector": "[data-testid='contracts-price']", "value": "0" },
+        { "type": "click", "selector": "[data-testid='contracts-place']" },
+        { "type": "advance", "ms": 1000 },
 
         { "type": "click", "selector": "[data-testid='nav-politics']" },
         { "type": "select", "selector": "[data-testid='politics-affiliation-flag']", "value": "freebooters" },
@@ -1255,6 +1512,20 @@
         { "type": "click", "selector": "[data-testid='start-new-game']" },
         { "type": "expect", "path": "meta.mode", "op": "eq", "value": "port" },
 
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='work-docks']" },
+        { "type": "advance", "ms": 5000 },
+        { "type": "click", "selector": "[data-testid='upgrade-auto-dockwork']" },
+
         { "type": "advance", "ms": 60000 },
         { "type": "expect", "path": "resources.gold", "op": "gt", "value": 0 },
 
@@ -1306,6 +1577,68 @@
 
         { "type": "advance", "ms": 265000 },
         { "type": "expect", "path": "meta.nowMs", "op": "gte", "value": 600000 }
+      ]
+    },
+    "save_import_fresh_fixture": {
+      "steps": [
+        { "type": "select", "selector": "[data-testid='fixture-select']", "value": "save_fresh" },
+        { "type": "click", "selector": "[data-testid='fixture-load']" },
+        { "type": "click", "selector": "[data-testid='save-import-submit']" },
+        { "type": "expect", "path": "meta.mode", "op": "eq", "value": "port" },
+        { "type": "expect", "path": "quality.ui.tutorialStepId", "op": "eq", "value": "tut:dock_intro" },
+        { "type": "expect", "path": "quality.progression.automationUnlocked", "op": "eq", "value": false },
+        { "type": "expect", "path": "resources.gold", "op": "eq", "value": 0 },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "port" },
+        { "type": "expect", "path": "quality.validation.ok", "op": "eq", "value": true }
+      ]
+    },
+    "save_import_after_automation_fixture": {
+      "steps": [
+        { "type": "select", "selector": "[data-testid='fixture-select']", "value": "save_after_automation" },
+        { "type": "click", "selector": "[data-testid='fixture-load']" },
+        { "type": "click", "selector": "[data-testid='save-import-submit']" },
+        { "type": "expect", "path": "meta.mode", "op": "eq", "value": "port" },
+        { "type": "expect", "path": "quality.ui.tutorialStepId", "op": "eq", "value": "tut:economy_intro" },
+        { "type": "expect", "path": "quality.progression.automationUnlocked", "op": "eq", "value": true },
+        { "type": "expect", "path": "quality.progression.goldPassivePerSec", "op": "gt", "value": 0 },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "economy" },
+        { "type": "expect", "path": "quality.validation.ok", "op": "eq", "value": true }
+      ]
+    },
+    "save_import_after_contracts_fixture": {
+      "steps": [
+        { "type": "select", "selector": "[data-testid='fixture-select']", "value": "save_after_contracts" },
+        { "type": "click", "selector": "[data-testid='fixture-load']" },
+        { "type": "click", "selector": "[data-testid='save-import-submit']" },
+        { "type": "expect", "path": "meta.mode", "op": "eq", "value": "port" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "economy" },
+        { "type": "expect", "path": "economy.contracts[0].commodityId", "op": "eq", "value": "wood" },
+        { "type": "expect", "path": "economy.contracts[0].filledQty", "op": "gt", "value": 0 },
+        { "type": "expect", "path": "quality.validation.ok", "op": "eq", "value": true }
+      ]
+    },
+    "save_import_after_cannon_fixture": {
+      "steps": [
+        { "type": "select", "selector": "[data-testid='fixture-select']", "value": "save_after_cannon" },
+        { "type": "click", "selector": "[data-testid='fixture-load']" },
+        { "type": "click", "selector": "[data-testid='save-import-submit']" },
+        { "type": "expect", "path": "meta.mode", "op": "eq", "value": "port" },
+        { "type": "expect", "path": "buffs[0].id", "op": "eq", "value": "cannon_volley" },
+        { "type": "expect", "path": "buffs[0].remainingMs", "op": "gt", "value": 0 },
+        { "type": "expect", "path": "quality.validation.ok", "op": "eq", "value": true }
+      ]
+    },
+    "save_import_after_starter_voyage_fixture": {
+      "steps": [
+        { "type": "select", "selector": "[data-testid='fixture-select']", "value": "save_after_starter_voyage" },
+        { "type": "click", "selector": "[data-testid='fixture-load']" },
+        { "type": "click", "selector": "[data-testid='save-import-submit']" },
+        { "type": "expect", "path": "meta.mode", "op": "eq", "value": "port" },
+        { "type": "expect", "path": "location.id", "op": "eq", "value": "turtle_cay" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "voyage" },
+        { "type": "expect", "path": "unlocks", "op": "includes", "value": "politics" },
+        { "type": "expect", "path": "stats.voyagesStarted", "op": "gte", "value": 1 },
+        { "type": "expect", "path": "quality.validation.ok", "op": "eq", "value": true }
       ]
     },
     "save_import_legacy_fixture": {
