@@ -1,0 +1,72 @@
+[
+  {
+    "id": "starter_run",
+    "name": "Starter Run",
+    "fromIslandId": "home_port",
+    "toIslandId": "turtle_cay",
+    "durationMs": 30000,
+    "rumCost": 5,
+    "goldReward": 50,
+    "influenceReward": 1
+  },
+  {
+    "id": "turtle_to_home",
+    "name": "Turtle Return",
+    "fromIslandId": "turtle_cay",
+    "toIslandId": "home_port",
+    "durationMs": 30000,
+    "rumCost": 5,
+    "goldReward": 45,
+    "influenceReward": 1
+  },
+  {
+    "id": "cay_to_haven",
+    "name": "Cay to Haven",
+    "fromIslandId": "turtle_cay",
+    "toIslandId": "ironhaven",
+    "durationMs": 45000,
+    "rumCost": 8,
+    "goldReward": 90,
+    "influenceReward": 2
+  },
+  {
+    "id": "haven_to_cay",
+    "name": "Haven to Cay",
+    "fromIslandId": "ironhaven",
+    "toIslandId": "turtle_cay",
+    "durationMs": 45000,
+    "rumCost": 8,
+    "goldReward": 80,
+    "influenceReward": 2
+  },
+  {
+    "id": "home_to_haven",
+    "name": "Home to Haven",
+    "fromIslandId": "home_port",
+    "toIslandId": "ironhaven",
+    "durationMs": 60000,
+    "rumCost": 10,
+    "goldReward": 140,
+    "influenceReward": 3
+  },
+  {
+    "id": "haven_to_home",
+    "name": "Haven to Home",
+    "fromIslandId": "ironhaven",
+    "toIslandId": "home_port",
+    "durationMs": 60000,
+    "rumCost": 10,
+    "goldReward": 120,
+    "influenceReward": 3
+  },
+  {
+    "id": "merchant_run",
+    "name": "Merchant Run",
+    "fromIslandId": "home_port",
+    "toIslandId": "turtle_cay",
+    "durationMs": 45000,
+    "rumCost": 6,
+    "goldReward": 80,
+    "influenceReward": 1
+  }
+]

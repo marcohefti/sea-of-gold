@@ -1,0 +1,16 @@
+[
+  { "id": "gold", "name": "Gold", "kind": "currency" },
+  { "id": "wood", "name": "Wood", "kind": "raw" },
+  { "id": "sugar", "name": "Sugar", "kind": "raw" },
+  { "id": "iron", "name": "Iron", "kind": "raw" },
+  { "id": "stone", "name": "Stone", "kind": "raw" },
+  { "id": "hemp", "name": "Hemp", "kind": "raw" },
+  { "id": "herbs", "name": "Herbs", "kind": "raw" },
+  { "id": "rum", "name": "Rum", "kind": "refined" },
+  { "id": "dye", "name": "Dye", "kind": "refined" },
+  { "id": "cloth", "name": "Cloth", "kind": "refined" },
+  { "id": "cosmetics", "name": "Cosmetics", "kind": "refined" },
+  { "id": "cannonballs", "name": "Cannonballs", "kind": "supply" },
+  { "id": "parts", "name": "Parts", "kind": "refined" },
+  { "id": "repair_kits", "name": "Repair Kits", "kind": "supply" }
+]

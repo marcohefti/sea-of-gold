@@ -37,6 +37,9 @@ Expose on `window`:
   - `unlocks`: `string[]`
   - `economy`: `{ contracts: Array<{ commodityId: string, qty: string|number, filledQty: string|number, status: string }> }`
   - `buffs`: `Array<{ id: string, remainingMs: number }>`
+  - `quality` (product-quality regression detectors):
+    - `quality.ui`: `{ mode, visibleModuleCount, visibleNavCount, primaryActionCount, totalActionCount, tutorialStepId }`
+    - `quality.progression`: `{ goldPassivePerSec, goldManualActionAvailable, goldManualActionCount, automationUnlocked, nextGoalId }`
 
 2) `window.advanceTime(ms: number): void | Promise<void>`
 - Deterministic stepping; does not depend on real-time rAF progression.
@@ -59,6 +62,10 @@ These IDs must exist once the corresponding UI exists. Do not rename them after 
 Global / nav:
 - `start-new-game`
 - `nav-port`, `nav-voyage`, `nav-crew`, `nav-economy`, `nav-politics`
+
+Dock (onboarding):
+- `work-docks`
+- `upgrade-auto-dockwork`
 
 Economy (contracts):
 - `contracts-open`, `contracts-place`, `contracts-collect`
@@ -84,9 +91,11 @@ AUTO:
 - Scenario: `smoke`
 - Steps:
   - advance `5000ms`
+  - click `[data-testid='work-docks']`
+  - advance `5000ms`
 - Expect:
   - `resources.gold` > `0`
-  - `meta.nowMs` >= `5000`
+  - `meta.nowMs` >= `10000`
 
 ### AC-M1-003 Save roundtrip is stable
 AUTO:
@@ -112,6 +121,26 @@ AUTO:
 - Expected:
   - `buffs` contains `{ id: "cannon_volley" }`
   - and its `remainingMs` is `> 0`
+
+## Product quality regression guards (must stay passing)
+
+These scenarios prevent silent regressions in onboarding clarity and manual→automation pacing.
+
+### AC-PQ-001 UI overwhelm guard
+AUTO:
+- Scenario: `ui_overwhelm_guard`
+- Expected (immediately after starting a new game):
+  - `quality.ui.visibleModuleCount` <= `1`
+  - `quality.ui.primaryActionCount` <= `2`
+  - `quality.ui.totalActionCount` <= `6`
+
+### AC-PQ-002 Manual → automation progression exists
+AUTO:
+- Scenario: `progression_manual_to_auto`
+- Expected:
+  - Early: `quality.progression.goldPassivePerSec` == `0` and `resources.gold` does not increase under `advanceTime` alone
+  - After manual action: `resources.gold` increases deterministically
+  - After buying first automation: `quality.progression.goldPassivePerSec` > `0` and gold increases under `advanceTime` without further manual actions
 
 ## Actions file requirements
 

@@ -1,0 +1,40 @@
+{
+  "url": "http://localhost:5180",
+  "seed": 1,
+  "horizonMin": 60,
+  "measureMin": 30,
+  "setupNowMs": 1412000,
+  "measureStartNowMs": 1412000,
+  "measureEndNowMs": 3212000,
+  "goldStart": 588,
+  "goldEnd": 2392,
+  "goldDelta": 1804,
+  "goldPerMin": 60.13333333333333,
+  "unlocks": [
+    "port",
+    "economy",
+    "minigame:cannon",
+    "route:starter_run",
+    "recipe:distill_rum",
+    "crew",
+    "voyage",
+    "politics",
+    "route:turtle_to_home",
+    "route:home_to_haven",
+    "route:cay_to_haven",
+    "route:haven_to_home",
+    "route:haven_to_cay",
+    "minigame:rigging",
+    "recipe:forge_cannonballs",
+    "recipe:craft_parts",
+    "recipe:assemble_repair_kits",
+    "recipe:brew_dye",
+    "recipe:weave_cloth",
+    "recipe:tailor_cosmetics",
+    "vanity_shop",
+    "flagship_built"
+  ],
+  "notes": [
+    "captain_banner not purchased in setup window"
+  ]
+}

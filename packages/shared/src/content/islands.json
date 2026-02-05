@@ -1,0 +1,23 @@
+[
+  {
+    "id": "home_port",
+    "name": "Home Port",
+    "tier": 1,
+    "controllerFlagId": "merchants",
+    "produces": { "wood": 60, "sugar": 30 }
+  },
+  {
+    "id": "turtle_cay",
+    "name": "Turtle Cay",
+    "tier": 1,
+    "controllerFlagId": "freebooters",
+    "produces": { "sugar": 60, "hemp": 20, "herbs": 20 }
+  },
+  {
+    "id": "ironhaven",
+    "name": "Ironhaven",
+    "tier": 2,
+    "controllerFlagId": "navy",
+    "produces": { "iron": 50, "stone": 40 }
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "id": "vanity:warehouse_signage",
+    "name": "Warehouse Signage",
+    "desc": "+20 warehouse cap at every port.",
+    "costCosmetics": 10
+  },
+  {
+    "id": "vanity:ship_figurehead",
+    "name": "Ship Figurehead",
+    "desc": "+10 max ship condition (and heal to match).",
+    "costCosmetics": 25
+  },
+  {
+    "id": "vanity:captain_banner",
+    "name": "Captain's Banner",
+    "desc": "+5% voyage gold permanently.",
+    "costCosmetics": 50
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "name": "@sea-of-gold/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sea-of-gold/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "lint": "echo \"(engine) lint skipped\"",
+    "build": "tsc -p tsconfig.json"
+  }
+}
+

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sloop",
+    "name": "Sloop",
+    "crewCap": 10,
+    "holdCap": 30,
+    "speedPct": 100,
+    "combatRating": 1,
+    "rumPerMinute": 2,
+    "buyCostGold": 0
+  },
+  {
+    "id": "brig",
+    "name": "Brig",
+    "crewCap": 20,
+    "holdCap": 60,
+    "speedPct": 105,
+    "combatRating": 2,
+    "rumPerMinute": 3,
+    "buyCostGold": 500
+  },
+  {
+    "id": "galleon",
+    "name": "Galleon",
+    "crewCap": 40,
+    "holdCap": 120,
+    "speedPct": 95,
+    "combatRating": 4,
+    "rumPerMinute": 5,
+    "buyCostGold": 2500
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "name": "@sea-of-gold/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "lint": "echo \"(shared) lint skipped\"",
+    "build": "tsc -p tsconfig.json"
+  }
+}
+

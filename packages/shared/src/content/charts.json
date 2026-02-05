@@ -1,0 +1,8 @@
+[
+  {
+    "id": "chart:merchant_run",
+    "name": "Chart — Merchant Run",
+    "routeId": "merchant_run",
+    "costGold": 50
+  }
+]

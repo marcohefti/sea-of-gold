@@ -1,0 +1,27 @@
+[
+  { "id": "distill_rum", "name": "Distill Rum", "input": { "sugar": 1 }, "output": { "rum": 1 }, "intervalMs": 2000 },
+  { "id": "brew_dye", "name": "Brew Dye", "input": { "herbs": 2 }, "output": { "dye": 1 }, "intervalMs": 4000 },
+  { "id": "weave_cloth", "name": "Weave Cloth", "input": { "hemp": 2 }, "output": { "cloth": 1 }, "intervalMs": 4000 },
+  {
+    "id": "tailor_cosmetics",
+    "name": "Tailor Cosmetics",
+    "input": { "dye": 1, "cloth": 1 },
+    "output": { "cosmetics": 1 },
+    "intervalMs": 6000
+  },
+  {
+    "id": "forge_cannonballs",
+    "name": "Forge Cannonballs",
+    "input": { "iron": 1, "wood": 1 },
+    "output": { "cannonballs": 5 },
+    "intervalMs": 5000
+  },
+  { "id": "craft_parts", "name": "Craft Parts", "input": { "iron": 1, "wood": 2 }, "output": { "parts": 1 }, "intervalMs": 7000 },
+  {
+    "id": "assemble_repair_kits",
+    "name": "Assemble Repair Kits",
+    "input": { "parts": 1, "hemp": 1 },
+    "output": { "repair_kits": 1 },
+    "intervalMs": 9000
+  }
+]

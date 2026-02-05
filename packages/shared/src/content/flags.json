@@ -1,0 +1,6 @@
+[
+  { "id": "merchants", "name": "Merchants Guild", "taxBps": 0 },
+  { "id": "freebooters", "name": "Freebooters", "taxBps": 200 },
+  { "id": "navy", "name": "Royal Navy", "taxBps": 500 },
+  { "id": "player", "name": "Independent", "taxBps": 0 }
+]

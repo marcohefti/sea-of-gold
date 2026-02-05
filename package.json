@@ -1,0 +1,12 @@
+{
+  "name": "sea-of-gold",
+  "private": true,
+  "packageManager": "pnpm@10.26.0",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "check:determinism": "node scripts/check_determinism.mjs",
+    "check:saves": "node scripts/stress_saves.mjs --url http://localhost:5180 --seed 123"
+  }
+}

@@ -1,0 +1,10 @@
+[
+  { "id": "economy", "name": "Economy", "hint": "Start a new game." },
+  { "id": "crew", "name": "Crew", "hint": "Reach 25 gold." },
+  { "id": "voyage", "name": "Voyage", "hint": "Produce any Rum." },
+  { "id": "politics", "name": "Politics", "hint": "Reach 100 gold or arrive at a new port." },
+  { "id": "minigame:cannon", "name": "Cannon Volley", "hint": "Start a new game." },
+  { "id": "minigame:rigging", "name": "Rigging Run", "hint": "Complete the Starter Run voyage." },
+  { "id": "recipe:forge_cannonballs", "name": "Forge Cannonballs", "hint": "Complete the Starter Run voyage." },
+  { "id": "vanity_shop", "name": "Vanity Shop", "hint": "Reach 10+ influence with your affiliated flag." }
+]

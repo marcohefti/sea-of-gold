@@ -1,0 +1,6 @@
+[
+  { "id": "upgrade:warehouse", "name": "Warehouse Upgrade", "hint": "Spend gold to increase warehouse cap at the current port." },
+  { "id": "upgrade:shipyard", "name": "Shipyard Upgrade", "hint": "Spend gold to increase fleet capacity." },
+  { "id": "project:flagship", "name": "Flagship Project", "hint": "Contribute gold + cosmetics for a permanent voyage bonus." },
+  { "id": "campaign:conquest", "name": "Conquest Campaign", "hint": "Pay a war chest + influence to attempt to take a port." }
+]
