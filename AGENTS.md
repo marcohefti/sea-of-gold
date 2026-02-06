@@ -2,27 +2,29 @@
 
 Read docs in this order:
 1) `acceptance.md`
-2) `GAME_SYSTEM.md`
-3) `FUN_UX_UI_RUBRIC.md`
-4) `DESIGN_SYSTEM.md`
-5) `AUTONOMOUS_EVAL_SYSTEM.md`
-6) `concept.md` (vision context only)
+2) `STATE_SNAPSHOT.md`
+3) `GAME_SYSTEM.md`
+4) `FUN_UX_UI_RUBRIC.md`
+5) `DESIGN_SYSTEM.md`
+6) `AUTONOMOUS_EVAL_SYSTEM.md`
+7) `concept.md` (vision context only)
 
 If docs conflict, follow that order.
 
 ## Development Loop (mandatory)
 
 - Use the `develop-idle-game` skill workflow (deterministic simulation + Playwright harness).
-- Create/update `progress.md` (keep `Original prompt:` at the top).
+- Update `STATE_SNAPSHOT.md` in place (no chronological logs).
 - After each meaningful change: run the Playwright harness, inspect artifacts, and fix the first failing expectation or new console error before continuing.
 - Before declaring anything “done”: ensure all `acceptance.md` scenarios pass, including the product-quality gates in `QUALITY_GATES.md` (`ui_overwhelm_guard`, `progression_manual_to_auto`, `quality_no_dead_time_early`, `quality_unlock_avalanche_guard`).
+- Always run browser automation/tests in headless mode (do not use headed browser runs for validation).
 
 ## Dev Server Port Policy (mandatory)
 
 - The dev server must start at port `5180`.
 - If `5180` is occupied, try `5181`, then `5182`, … up to `5189`.
 - If none of `5180–5189` are available, fail with a clear error.
-- Use the selected port consistently for Playwright harness runs (`--url http://localhost:<port>`), and record it in `progress.md` when it changes.
+- Use the selected port consistently for Playwright harness runs (`--url http://localhost:<port>`), and record it in `STATE_SNAPSHOT.md` only if policy or workflow behavior changes.
 
 ## Architecture Non‑Negotiables
 
@@ -114,6 +116,6 @@ Ask only if needed for:
 ### Documentation requirement
 
 Whenever you make an autonomous choice:
-- Record it in `progress.md` under a “Decisions” note with 1–2 lines of rationale.
+- Record it in `STATE_SNAPSHOT.md` under a “Decisions” note with 1–2 lines of rationale.
 - If it affects tests or selectors, update `acceptance.md` first, then implement, then rerun the harness.
 - If it changes gameplay behavior, update `GAME_SYSTEM.md` in the same iteration.

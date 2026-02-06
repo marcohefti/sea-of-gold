@@ -5,11 +5,12 @@ Single-player deterministic idle game about building a pirate trade empire.
 ## Canonical Docs (read in this order)
 
 1. `acceptance.md` — release acceptance and deterministic test contract (definition of done).
-2. `GAME_SYSTEM.md` — current implemented game systems and balancing rules.
-3. `FUN_UX_UI_RUBRIC.md` — measurable fun/UX/UI evaluation rubric for autonomous playtests.
-4. `DESIGN_SYSTEM.md` — UI/component/tokens system and hybrid UI philosophy.
-5. `AUTONOMOUS_EVAL_SYSTEM.md` — autonomous agent playtest/evaluation/decision loop.
-6. `AGENTS.md` — repository process constraints for coding agents.
+2. `STATE_SNAPSHOT.md` — single-file current-state snapshot for new-session bootstrap.
+3. `GAME_SYSTEM.md` — current implemented game systems and balancing rules.
+4. `FUN_UX_UI_RUBRIC.md` — measurable fun/UX/UI evaluation rubric for autonomous playtests.
+5. `DESIGN_SYSTEM.md` — UI/component/tokens system and hybrid UI philosophy.
+6. `AUTONOMOUS_EVAL_SYSTEM.md` — autonomous agent playtest/evaluation/decision loop.
+7. `AGENTS.md` — repository process constraints for coding agents.
 
 `concept.md` is vision context only. If it conflicts with `acceptance.md` or `GAME_SYSTEM.md`, follow those files.
 

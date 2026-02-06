@@ -6,6 +6,7 @@ import process from "node:process";
 const ROOT = process.cwd();
 const ACCEPTANCE_PATH = path.join(ROOT, "acceptance.md");
 const ACTIONS_PATH = path.join(ROOT, "e2e", "action_payloads.json");
+const SNAPSHOT_PATH = path.join(ROOT, "STATE_SNAPSHOT.md");
 
 const REQUIRED_QUALITY_SCENARIOS = [
   "ui_overwhelm_guard",
@@ -78,8 +79,10 @@ function formatList(items) {
 function main() {
   if (!fs.existsSync(ACCEPTANCE_PATH)) fail("check:autonomy-contract FAILED: acceptance.md not found");
   if (!fs.existsSync(ACTIONS_PATH)) fail("check:autonomy-contract FAILED: e2e/action_payloads.json not found");
+  if (!fs.existsSync(SNAPSHOT_PATH)) fail("check:autonomy-contract FAILED: STATE_SNAPSHOT.md not found");
 
   const acceptanceText = fs.readFileSync(ACCEPTANCE_PATH, "utf8");
+  const snapshotText = fs.readFileSync(SNAPSHOT_PATH, "utf8");
   const acceptanceScenarioIds = extractAcceptanceScenarioIds(acceptanceText);
   const scenarioMap = readScenarioMap();
   const actionScenarioIds = Object.keys(scenarioMap);
@@ -91,6 +94,13 @@ function main() {
   const missingInActions = acceptanceScenarioIds.filter((id) => !actionSet.has(id));
 
   const contractErrors = [];
+
+  if (!/Status:\s*active/i.test(acceptanceText) || !/Last revised:\s*\d{4}-\d{2}-\d{2}/i.test(acceptanceText)) {
+    contractErrors.push("acceptance.md missing freshness metadata (expected: `Status: active` and `Last revised: YYYY-MM-DD`).");
+  }
+  if (!/Last Updated:\s*\n-\s*\d{4}-\d{2}-\d{2}/i.test(snapshotText) || !/Normative Doc Order:/i.test(snapshotText)) {
+    contractErrors.push("STATE_SNAPSHOT.md missing required snapshot metadata (expected: `Last Updated` and `Normative Doc Order`).");
+  }
 
   if (missingInAcceptance.length > 0) {
     contractErrors.push(

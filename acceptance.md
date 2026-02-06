@@ -3,6 +3,18 @@
 This file is the single source of truth for "done".
 If any other doc conflicts with this file, this file wins.
 
+Release metadata:
+- Status: active
+- Last revised: 2026-02-06
+- Supersedes: prior milestone-specific acceptance notes and historical progress logs
+
+## 0) Freshness And Change Control
+
+- Keep this file aligned with `e2e/action_payloads.json` in the same change set.
+- If behavior expectations change, update this file first, then implementation.
+- Do not use `progress.md` as an acceptance source.
+- Historical notes are non-normative; only this file defines current release pass/fail.
+
 ## 1) Verification Loop (Mandatory)
 
 Use the `develop-idle-game` Playwright harness.

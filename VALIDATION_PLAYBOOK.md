@@ -4,6 +4,7 @@ Operational guide for validating code changes.
 
 Primary references:
 - `acceptance.md`
+- `STATE_SNAPSHOT.md`
 - `AUTONOMOUS_EVAL_SYSTEM.md`
 
 ## 1) Local Commands

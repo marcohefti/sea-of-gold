@@ -6,11 +6,12 @@ This document defines how an agent operates autonomously: playtesting, evaluatio
 
 Before making decisions, agents must load:
 1. `acceptance.md`
-2. `GAME_SYSTEM.md`
-3. `FUN_UX_UI_RUBRIC.md`
-4. `DESIGN_SYSTEM.md`
-5. `e2e/action_payloads.json`
-6. `AGENTS.md`
+2. `STATE_SNAPSHOT.md`
+3. `GAME_SYSTEM.md`
+4. `FUN_UX_UI_RUBRIC.md`
+5. `DESIGN_SYSTEM.md`
+6. `e2e/action_payloads.json`
+7. `AGENTS.md`
 
 If files disagree:
 - `acceptance.md` wins for pass/fail.
@@ -30,10 +31,10 @@ When spec is silent, decide using this order:
 
 1. Pick one concrete change.
 2. Implement smallest vertical slice.
-3. Update `progress.md` with:
+3. Update `STATE_SNAPSHOT.md` with:
    - what changed
    - decisions + rationale
-   - evidence paths or failing step references
+   - current evidence path references (no chronological log dump)
 4. Run harness immediately and inspect artifacts.
 5. Fix first failing expectation or first new console/page error before continuing.
 6. Repeat.
@@ -153,7 +154,7 @@ Agents must ask only for:
 
 A complete autonomous run must include:
 - code/doc changes made
-- decisions with rationale in `progress.md`
+- decisions with rationale in `STATE_SNAPSHOT.md`
 - exact scenarios/checks executed
 - pass/fail status and notable evidence paths
 - remaining known gaps (if any)

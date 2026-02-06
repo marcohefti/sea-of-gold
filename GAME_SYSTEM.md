@@ -242,4 +242,4 @@ Late game:
 
 - Never rename stable IDs/selectors without migration and acceptance updates.
 - All balancing or design changes must preserve deterministic replay and save compatibility.
-- Any autonomous design decision must be logged in `progress.md` with rationale.
+- Any autonomous design decision must be logged in `STATE_SNAPSHOT.md` with rationale.
