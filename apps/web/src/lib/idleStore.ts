@@ -3,15 +3,27 @@ import {
   advance,
   getActiveContractCountForPortForUi,
   getCannonVolleyRefreshWindowMsForUi,
+  getConquestRequirementsForUi,
+  getContractPlacementFeeForUi,
   getContractMaxActivePerPortForUi,
+  getCrewHireCostGoldForUi,
   getDockAutomateCostGoldForUi,
+  getDonationGoldPerInfluenceForUi,
   getEffectivePortTaxBpsForUi,
   getFactionStandingForUi,
   getDockPassiveGoldPerSecForUi,
   getDockWorkDurationMsForUi,
   getDockWorkHustleReduceMsForUi,
+  getFlagshipForUi,
+  getNextGoalsForUi,
+  getPortGoldFlowPerMinForUi,
   getRiggingRunRefreshWindowMsForUi,
+  getShipRepairForUi,
+  getShipyardMaxLevelForUi,
+  getShipyardUpgradeCostForUi,
+  getTaxReliefCampaignForUi,
   getTutorialStepIdForUi,
+  getVoyageStartRequirements,
   invUsed,
   isCommodityId,
   isDockWorkManualAvailableForUi,
@@ -22,6 +34,7 @@ import {
 import { assertGameStateInvariants, validateGameStateInvariants, type GameStateValidationReport } from "@sea-of-gold/engine";
 import {
   bigintToJsonNumberString,
+  CHART_BY_ID,
   FLAG_BY_ID,
   FLAGS,
   IDLE_API_VERSION,
@@ -29,6 +42,8 @@ import {
   parseNonNegIntLike,
   parseSavePayload,
   ROUTES,
+  SHIP_CLASS_BY_ID,
+  VANITY_BY_ID,
 } from "@sea-of-gold/shared";
 
 type Listener = () => void;
@@ -121,6 +136,33 @@ export type IdleTextState = {
       goldManualActionCount: number;
       automationUnlocked: boolean;
       nextGoalId: string;
+      nextGoalCount: number;
+      nextGoals: string[];
+      economyUnlocked: boolean;
+      crewUnlocked: boolean;
+      voyageUnlocked: boolean;
+      politicsUnlocked: boolean;
+      vanityUnlocked: boolean;
+      unlockedRouteCount: number;
+      globalUnlockedRouteCount: number;
+      availableRouteCount: number;
+      currentPortUnlockedRouteCount: number;
+      currentPortTotalRouteCount: number;
+      startableRouteCount: number;
+      currentPortStartableRouteCount: number;
+      currentPortMissingRumRouteCount: number;
+      currentPortMinRumNeeded: string | number;
+      currentPortRumGap: string | number;
+      chartRouteCount: number;
+      chartRouteUnlockedCount: number;
+      currentPortChartLockedRouteCount: number;
+      currentPortAffordableChartCount: number;
+      contractOpenCount: number;
+      contractCollectableCount: number;
+      activeBuffCount: number;
+      storageFillBps: number;
+      holdFillBps: number;
+      netPortGoldPerMin: string | number;
     };
     pacing?: {
       manualActionId: string;
@@ -130,6 +172,9 @@ export type IdleTextState = {
       manualActionHustleReduceMs: number;
       manualActionDurationMs: number;
       meaningfulActionCount: number;
+      meaningfulActionIds: string[];
+      decisionActionCount: number;
+      blockedByTimers: string[];
       timeToNextMeaningfulActionMs: number;
       idleGoldPerSec: string | number;
     };
@@ -396,21 +441,251 @@ function computeQualityUiCounts(state: GameState, ui: IdleUiText | undefined) {
   };
 }
 
+const DECISION_ACTION_IDS = new Set([
+  "work-docks-start",
+  "work-docks-hustle",
+  "contracts-place",
+  "hold-transfer",
+  "voyage-prepare",
+  "voyage-start",
+  "minigame-cannon-start",
+  "minigame-rigging-start",
+  "crew-hire",
+  "ship-buy-class",
+  "fleet-buy-ship",
+  "shipyard-upgrade",
+  "chart-buy",
+  "politics-set-affiliation",
+  "politics-donate",
+  "politics-campaign-start-tax-relief",
+  "conquest-start",
+  "flagship-contribute",
+  "vanity-buy",
+]);
+
+const CHART_ROUTE_IDS = new Set(Object.values(CHART_BY_ID).map((c) => c.routeId));
+
+function pushUnique(ids: string[], id: string) {
+  if (!ids.includes(id)) ids.push(id);
+}
+
+function listUnlockedRoutesFromPort(state: GameState): string[] {
+  if (state.mode === "title") return [];
+  const portId = state.location.islandId;
+  return ROUTES.filter((route) => route.fromIslandId === portId && state.unlocks.includes(`route:${route.id}`)).map((route) => route.id);
+}
+
+function canStartRouteFromHold(state: GameState, routeId: string): boolean {
+  const req = getVoyageStartRequirements(state, state.ship.classId, routeId);
+  if (!req) return false;
+  return state.storage.shipHold.inv.rum >= req.totalRum;
+}
+
+function getBuffRemainingMsForQuality(state: GameState, buffId: string): number {
+  const buff = state.buffs.find((b) => b.id === buffId);
+  return buff ? Math.max(0, Math.trunc(buff.remainingMs)) : 0;
+}
+
+function canStartAnyConquest(state: GameState): boolean {
+  if (state.mode !== "port") return false;
+  const attackerFlagId = state.politics.affiliationFlagId;
+  if (attackerFlagId === "player") return false;
+  const attackerInf = state.politics.influenceByFlagId[attackerFlagId] ?? 0;
+  if (attackerInf <= 0) return false;
+
+  for (const island of Object.values(ISLAND_BY_ID)) {
+    const controller = state.world.controllerByIslandId[island.id] ?? island.controllerFlagId ?? "player";
+    if (controller === attackerFlagId) continue;
+    const req = getConquestRequirementsForUi(island.tier);
+    if (attackerInf >= req.requiredInfluence && state.resources.gold >= req.warChestGold) return true;
+  }
+  return false;
+}
+
+function computeMeaningfulActionIds(state: GameState): string[] {
+  if (state.mode === "title") return ["start-new-game"];
+
+  const ids: string[] = [];
+  const portId = state.location.islandId;
+  const wh = state.storage.warehouses[portId];
+  const hold = state.storage.shipHold;
+  const manualAvail = isDockWorkManualAvailableForUi(state);
+
+  if (manualAvail) {
+    pushUnique(ids, state.dock.workRemainingMs > 0 ? "work-docks-hustle" : "work-docks-start");
+  }
+
+  const automateCost = getDockAutomateCostGoldForUi();
+  if (!state.dock.passiveEnabled && state.resources.gold >= automateCost) {
+    pushUnique(ids, "upgrade-auto-dockwork");
+  }
+
+  const economyUnlocked = state.unlocks.includes("economy");
+  if (economyUnlocked) {
+    const activeContracts = getActiveContractCountForPortForUi(state, portId);
+    const maxContracts = getContractMaxActivePerPortForUi();
+    const basePlacementFee = getContractPlacementFeeForUi(state, 1n);
+    if (activeContracts < maxContracts && state.resources.gold >= basePlacementFee) {
+      pushUnique(ids, "contracts-place");
+    }
+
+    const contractsHere = state.economy.contracts.filter((c) => c.portId === portId && (c.status === "open" || c.status === "filled"));
+    if (contractsHere.some((c) => c.filledQty > c.collectedQty)) pushUnique(ids, "contracts-collect");
+    if (contractsHere.length > 0) pushUnique(ids, "contracts-cancel");
+  }
+
+  if (state.unlocks.includes("recipe:distill_rum")) pushUnique(ids, "production-distill-toggle");
+
+  if (state.unlocks.includes("voyage")) {
+    const whHasAny = wh ? Object.values(wh.inv).some((v) => v > 0n) : false;
+    const holdHasAny = Object.values(hold.inv).some((v) => v > 0n);
+    if (whHasAny || holdHasAny) pushUnique(ids, "hold-transfer");
+
+    const routeIds = listUnlockedRoutesFromPort(state);
+    if (state.voyage.status === "idle" && routeIds.length > 0) {
+      pushUnique(ids, "voyage-prepare");
+      if (routeIds.some((routeId) => canStartRouteFromHold(state, routeId))) {
+        pushUnique(ids, "voyage-start");
+      }
+    }
+    if (state.voyage.status === "completed") pushUnique(ids, "voyage-collect");
+  }
+
+  if (state.ship.condition < state.ship.maxCondition && state.voyage.status !== "running") {
+    const repair = getShipRepairForUi();
+    const hasRepairKit = (wh?.inv.repair_kits ?? 0n) > 0n;
+    if (hasRepairKit || state.resources.gold >= repair.goldCost) {
+      pushUnique(ids, "ship-repair");
+    }
+  }
+
+  if (state.unlocks.includes("crew")) {
+    const crewCap = SHIP_CLASS_BY_ID[state.ship.classId]?.crewCap ?? state.crew.hired;
+    const crewHireCost = getCrewHireCostGoldForUi();
+    if (state.crew.hired < crewCap && state.resources.gold >= crewHireCost) {
+      pushUnique(ids, "crew-hire");
+    }
+    if (state.crew.hired > 0) pushUnique(ids, "crew-fire");
+
+    const shipyardMax = getShipyardMaxLevelForUi();
+    if (state.shipyard.level < shipyardMax) {
+      const shipyardCost = getShipyardUpgradeCostForUi(state.shipyard.level + 1);
+      if (state.resources.gold >= shipyardCost) pushUnique(ids, "shipyard-upgrade");
+    }
+
+    if (state.voyage.status !== "running") {
+      for (const shipClass of Object.values(SHIP_CLASS_BY_ID)) {
+        const cost = BigInt(shipClass.buyCostGold);
+        if (shipClass.id !== state.ship.classId && state.resources.gold >= cost) pushUnique(ids, "ship-buy-class");
+        if (shipClass.id !== "sloop" && state.resources.gold >= cost && state.fleet.ships.length + 1 < state.fleet.maxShips) {
+          pushUnique(ids, "fleet-buy-ship");
+        }
+      }
+    }
+  }
+
+  if (state.unlocks.includes("minigame:cannon")) {
+    const cannonBuffBlocked = getBuffRemainingMsForQuality(state, "cannon_volley") >= getCannonVolleyRefreshWindowMsForUi();
+    if (state.minigames.cannon.status === "running") pushUnique(ids, "minigame-cannon-fire");
+    else if (!cannonBuffBlocked) pushUnique(ids, "minigame-cannon-start");
+  }
+
+  if (state.unlocks.includes("minigame:rigging")) {
+    const riggingBuffBlocked = getBuffRemainingMsForQuality(state, "rigging_run") >= getRiggingRunRefreshWindowMsForUi();
+    if (state.minigames.rigging.status === "running") pushUnique(ids, "minigame-rigging-tug");
+    else if (!riggingBuffBlocked) pushUnique(ids, "minigame-rigging-start");
+  }
+
+  if (state.unlocks.includes("politics")) {
+    if (state.politics.affiliationFlagId === "player") pushUnique(ids, "politics-set-affiliation");
+    if (state.resources.gold >= getDonationGoldPerInfluenceForUi()) pushUnique(ids, "politics-donate");
+
+    if (state.politics.campaign.status === "running") {
+      pushUnique(ids, "politics-campaign-abort");
+    } else {
+      const campaign = getTaxReliefCampaignForUi(portId);
+      const controllerFlagId = state.world.controllerByIslandId[portId] ?? ISLAND_BY_ID[portId]?.controllerFlagId ?? "player";
+      const influence = state.politics.influenceByFlagId[controllerFlagId] ?? 0;
+      if (influence >= campaign.requiredInfluence && state.resources.gold >= campaign.goldCost) {
+        pushUnique(ids, "politics-campaign-start-tax-relief");
+      }
+    }
+
+    if (state.conquest.status === "running") pushUnique(ids, "conquest-abort");
+    else if (canStartAnyConquest(state)) pushUnique(ids, "conquest-start");
+  }
+
+  if (state.unlocks.includes("vanity_shop")) {
+    const cosmetics = wh?.inv.cosmetics ?? 0n;
+    if (Object.values(VANITY_BY_ID).some((v) => cosmetics >= BigInt(v.costCosmetics))) {
+      pushUnique(ids, "vanity-buy");
+    }
+  }
+
+  const flagship = getFlagshipForUi();
+  const portCosmetics = wh?.inv.cosmetics ?? 0n;
+  if (
+    state.flagship.progress < state.flagship.required &&
+    state.resources.gold >= flagship.contributeGold &&
+    portCosmetics >= flagship.contributeCosmetics
+  ) {
+    pushUnique(ids, "flagship-contribute");
+  }
+
+  for (const chart of Object.values(CHART_BY_ID)) {
+    if (state.unlocks.includes(chart.id)) continue;
+    if (state.resources.gold >= BigInt(chart.costGold)) {
+      pushUnique(ids, "chart-buy");
+      break;
+    }
+  }
+
+  return ids;
+}
+
+function estimateTimeToNextMeaningfulActionMs(state: GameState, meaningfulActionCount: number): { ms: number; blockedByTimers: string[] } {
+  if (meaningfulActionCount > 0) return { ms: 0, blockedByTimers: [] };
+
+  const timers: Array<{ id: string; ms: number }> = [];
+  if (state.dock.workRemainingMs > 0) timers.push({ id: "dock", ms: Math.max(0, Math.trunc(state.dock.workRemainingMs)) });
+  if (state.voyage.status === "running" && state.voyage.remainingMs > 0) {
+    timers.push({ id: "voyage", ms: Math.max(0, Math.trunc(state.voyage.remainingMs)) });
+  }
+  if (state.minigames.cannon.status === "running") {
+    timers.push({
+      id: "minigame:cannon",
+      ms: Math.max(0, Math.trunc(state.minigames.cannon.durationMs - state.minigames.cannon.elapsedMs)),
+    });
+  }
+  if (state.minigames.rigging.status === "running") {
+    timers.push({
+      id: "minigame:rigging",
+      ms: Math.max(0, Math.trunc(state.minigames.rigging.durationMs - state.minigames.rigging.elapsedMs)),
+    });
+  }
+  if (state.politics.campaign.status === "running" && state.politics.campaign.remainingMs > 0) {
+    timers.push({ id: "politics:campaign", ms: Math.max(0, Math.trunc(state.politics.campaign.remainingMs)) });
+  }
+  if (state.conquest.status === "running" && state.conquest.remainingMs > 0) {
+    timers.push({ id: "conquest", ms: Math.max(0, Math.trunc(state.conquest.remainingMs)) });
+  }
+
+  if (timers.length === 0) return { ms: 0, blockedByTimers: [] };
+  const minMs = Math.min(...timers.map((t) => t.ms));
+  const blockedByTimers = timers.filter((t) => t.ms === minMs).map((t) => t.id);
+  return { ms: minMs, blockedByTimers };
+}
+
 function computeQualityPacing(state: GameState) {
-  const stepId = state.mode === "title" ? "tut:title" : getTutorialStepIdForUi(state);
   const passivePerSec = getDockPassiveGoldPerSecForUi(state);
   const manualAvail = isDockWorkManualAvailableForUi(state);
-  const automateCost = getDockAutomateCostGoldForUi();
   const durationMs = getDockWorkDurationMsForUi();
   const hustleReduceMs = getDockWorkHustleReduceMsForUi();
-  const canBuyAutomation =
-    state.mode === "port" && stepId === "tut:dock_intro" && !state.dock.passiveEnabled && state.resources.gold >= automateCost;
 
-  const meaningfulActionCount =
-    stepId === "tut:dock_intro" ? (manualAvail ? 1 : 0) + (canBuyAutomation ? 1 : 0) : 1;
-
-  const timeToNextMeaningfulActionMs =
-    meaningfulActionCount > 0 ? 0 : Math.max(0, Math.trunc(state.dock.workRemainingMs));
+  const meaningfulActionIds = computeMeaningfulActionIds(state);
+  const meaningfulActionCount = meaningfulActionIds.length;
+  const decisionActionCount = meaningfulActionIds.filter((id) => DECISION_ACTION_IDS.has(id)).length;
+  const nextAction = estimateTimeToNextMeaningfulActionMs(state, meaningfulActionCount);
 
   const manualActionCooldownMs = manualAvail ? 0 : Math.max(0, Math.trunc(state.dock.workRemainingMs));
 
@@ -422,7 +697,10 @@ function computeQualityPacing(state: GameState) {
     manualActionHustleReduceMs: hustleReduceMs,
     manualActionDurationMs: durationMs,
     meaningfulActionCount,
-    timeToNextMeaningfulActionMs,
+    meaningfulActionIds,
+    decisionActionCount,
+    blockedByTimers: nextAction.blockedByTimers,
+    timeToNextMeaningfulActionMs: nextAction.ms,
     idleGoldPerSec: bigintToJsonNumberString(passivePerSec),
   };
 }
@@ -437,9 +715,64 @@ function deriveNextGoalId(state: GameState): string {
   }
 
   if (!state.unlocks.includes("economy")) return "goal:unlock_economy";
-  if (state.unlocks.includes("economy") && state.economy.contracts.length === 0) return "goal:place_first_contract";
-  if (state.unlocks.includes("minigame:cannon") && !state.buffs.some((b) => b.id === "cannon_volley")) return "goal:play_cannon_volley";
-  return "goal:next";
+  if (state.economy.contracts.length === 0) return "goal:place_first_contract";
+  if (!state.unlocks.includes("recipe:distill_rum")) return "goal:unlock_distillery";
+
+  const portId = state.location.islandId;
+  const wh = state.storage.warehouses[portId];
+  const whRum = wh?.inv.rum ?? 0n;
+  const holdRum = state.storage.shipHold.inv.rum;
+
+  if (!state.unlocks.includes("voyage")) {
+    return whRum + holdRum > 0n ? "goal:unlock_voyage" : "goal:produce_rum";
+  }
+
+  if (state.voyage.status === "completed") return "goal:collect_voyage";
+
+  const routeIds = listUnlockedRoutesFromPort(state);
+  const routeRequirements = routeIds
+    .map((routeId) => getVoyageStartRequirements(state, state.ship.classId, routeId))
+    .filter((req): req is NonNullable<ReturnType<typeof getVoyageStartRequirements>> => !!req);
+  const minRumNeeded =
+    routeRequirements.length > 0
+      ? routeRequirements.reduce((min, req) => (req.totalRum < min ? req.totalRum : min), routeRequirements[0].totalRum)
+      : 0n;
+  const chartsFromPort = Object.values(CHART_BY_ID).filter((chart) => {
+    const route = ROUTES.find((r) => r.id === chart.routeId);
+    return route?.fromIslandId === portId;
+  });
+  const affordableCharts = chartsFromPort.filter(
+    (chart) => !state.unlocks.includes(chart.id) && state.resources.gold >= BigInt(chart.costGold)
+  );
+
+  if (routeIds.length === 0) {
+    if (affordableCharts.length > 0) return "goal:buy_route_chart";
+    if (chartsFromPort.length > 0) return "goal:earn_chart_gold";
+    return "goal:unlock_route_branch";
+  }
+
+  const hasStartableRoute = routeIds.some((routeId) => canStartRouteFromHold(state, routeId));
+  if (state.voyage.status === "idle" && routeIds.length > 0 && !hasStartableRoute) {
+    if (whRum > 0n && holdRum < minRumNeeded) return "goal:load_hold_rum";
+    return whRum > 0n ? "goal:top_up_hold" : "goal:produce_rum";
+  }
+  if (state.stats.voyagesStarted <= 0 && hasStartableRoute) return "goal:start_first_voyage";
+  if (state.stats.voyagesStarted < 3 && hasStartableRoute) return "goal:run_voyages";
+  if (affordableCharts.length > 0) return "goal:buy_route_chart";
+
+  if (!state.unlocks.includes("politics")) return "goal:unlock_politics";
+  if (state.politics.affiliationFlagId === "player") return "goal:choose_affiliation";
+  if (!state.unlocks.includes("vanity_shop")) return "goal:reach_10_influence";
+
+  if (state.shipyard.level < 2) return "goal:upgrade_shipyard";
+  if (state.fleet.maxShips < 3) return "goal:expand_fleet";
+
+  if (state.unlocks.includes("minigame:cannon") && !state.buffs.some((b) => b.id === "cannon_volley")) {
+    return "goal:play_cannon_volley";
+  }
+
+  if (!state.unlocks.includes("flagship_built")) return "goal:build_flagship";
+  return "goal:expand_routes";
 }
 
 function serializeStateForSave(state: GameState) {
@@ -711,8 +1044,16 @@ export function createIdleStore(): IdleStore {
     const warnings = [...base.warnings];
 
     const pacing = computeQualityPacing(state);
+    const stepId = state.mode === "title" ? "tut:title" : getTutorialStepIdForUi(state);
+    const nextGoals = getNextGoalsForUi(state);
     if (state.mode !== "title" && state.tutorial.stepId === "tut:dock_intro" && pacing.meaningfulActionCount === 0) {
       errors.push("Quality gate: dead time — no meaningful actions available in tut:dock_intro.");
+    }
+    if (stepId === "tut:port_core" && pacing.meaningfulActionCount < 2) {
+      warnings.push("Quality signal: low choice pressure — fewer than 2 meaningful actions in tut:port_core.");
+    }
+    if (state.mode === "port" && nextGoals.length === 0) {
+      warnings.push("Quality signal: no explicit goals returned by getNextGoalsForUi.");
     }
 
     if (lastUnlockDeltaInteractives > 8) {
@@ -820,6 +1161,39 @@ export function createIdleStore(): IdleStore {
         used: getActiveContractCountForPortForUi(state, portId),
         max: getContractMaxActivePerPortForUi(),
       };
+      const contractsHere = state.economy.contracts.filter((c) => c.portId === portId && (c.status === "open" || c.status === "filled"));
+      const collectableContractsHere = contractsHere.filter((c) => c.filledQty > c.collectedQty);
+      const unlockedRouteIds = listUnlockedRoutesFromPort(state);
+      const startableRouteCount = unlockedRouteIds.filter((routeId) => canStartRouteFromHold(state, routeId)).length;
+      const routeRequirements = unlockedRouteIds
+        .map((routeId) => getVoyageStartRequirements(state, state.ship.classId, routeId))
+        .filter((req): req is NonNullable<ReturnType<typeof getVoyageStartRequirements>> => !!req);
+      const minRumNeeded =
+        routeRequirements.length > 0
+          ? routeRequirements.reduce((min, req) => (req.totalRum < min ? req.totalRum : min), routeRequirements[0].totalRum)
+          : 0n;
+      const holdRum = holdInv.rum;
+      const rumGap = holdRum >= minRumNeeded ? 0n : minRumNeeded - holdRum;
+      const missingRumRouteCount = routeRequirements.filter((req) => holdRum < req.totalRum).length;
+      const globalUnlockedRouteCount = state.unlocks.filter((id) => id.startsWith("route:")).length;
+      const currentPortTotalRouteCount = ROUTES.filter((route) => route.fromIslandId === portId).length;
+      const chartRouteCount = Object.keys(CHART_BY_ID).length;
+      const chartRouteUnlockedCount = Object.values(CHART_BY_ID).filter((chart) => state.unlocks.includes(chart.id)).length;
+      const chartLockedUnlockedRouteCount = unlockedRouteIds.filter((routeId) => CHART_ROUTE_IDS.has(routeId)).length;
+      const currentPortChartLocked = Object.values(CHART_BY_ID).filter((chart) => {
+        const route = ROUTES.find((r) => r.id === chart.routeId);
+        return route?.fromIslandId === portId && !state.unlocks.includes(chart.id);
+      });
+      const currentPortAffordableChartCount = currentPortChartLocked.filter(
+        (chart) => state.resources.gold >= BigInt(chart.costGold)
+      ).length;
+      const nextGoals = getNextGoalsForUi(state);
+      const goalCount = nextGoals.length;
+      const portGoldFlow = getPortGoldFlowPerMinForUi(state);
+      const warehouseUsed = invUsed(whInv);
+      const holdUsed = invUsed(holdInv);
+      const storageFillBps = wh?.cap && wh.cap > 0n ? Number((warehouseUsed * 10_000n) / wh.cap) : 0;
+      const holdFillBps = state.storage.shipHold.cap > 0n ? Number((holdUsed * 10_000n) / state.storage.shipHold.cap) : 0;
 
       const controllerFlagId = state.world.controllerByIslandId[portId] ?? ISLAND_BY_ID[portId]?.controllerFlagId ?? "player";
       const baseTaxBps = FLAG_BY_ID[controllerFlagId]?.taxBps ?? 0;
@@ -863,6 +1237,33 @@ export function createIdleStore(): IdleStore {
               goldManualActionCount: manualAvail ? 1 : 0,
               automationUnlocked: state.dock.passiveEnabled,
               nextGoalId: deriveNextGoalId(state),
+              nextGoalCount: goalCount,
+              nextGoals,
+              economyUnlocked: state.unlocks.includes("economy"),
+              crewUnlocked: state.unlocks.includes("crew"),
+              voyageUnlocked: state.unlocks.includes("voyage"),
+              politicsUnlocked: state.unlocks.includes("politics"),
+              vanityUnlocked: state.unlocks.includes("vanity_shop"),
+              unlockedRouteCount: globalUnlockedRouteCount,
+              globalUnlockedRouteCount,
+              availableRouteCount: unlockedRouteIds.length,
+              currentPortUnlockedRouteCount: unlockedRouteIds.length,
+              currentPortTotalRouteCount,
+              startableRouteCount,
+              currentPortStartableRouteCount: startableRouteCount,
+              currentPortMissingRumRouteCount: missingRumRouteCount,
+              currentPortMinRumNeeded: bigintToJsonNumberString(minRumNeeded),
+              currentPortRumGap: bigintToJsonNumberString(rumGap),
+              chartRouteCount,
+              chartRouteUnlockedCount: Math.max(chartRouteUnlockedCount, chartLockedUnlockedRouteCount),
+              currentPortChartLockedRouteCount: currentPortChartLocked.length,
+              currentPortAffordableChartCount,
+              contractOpenCount: contractsHere.length,
+              contractCollectableCount: collectableContractsHere.length,
+              activeBuffCount: state.buffs.length,
+              storageFillBps,
+              holdFillBps,
+              netPortGoldPerMin: bigintToJsonNumberString(portGoldFlow.netGoldPerMin),
             },
             pacing,
             validation,

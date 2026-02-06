@@ -1,52 +1,77 @@
-# Sea of Gold — Acceptance Criteria
+# Sea of Gold — Acceptance Criteria (Current Release)
 
-This is the single source of truth for “done”.  
-If `concept.md` disagrees with this file, this file wins.
+This file is the single source of truth for "done".
+If any other doc conflicts with this file, this file wins.
 
-## Verification loop (mandatory)
+## 1) Verification Loop (Mandatory)
 
-Use the `develop-idle-game` skill harness. The project must provide an actions file and a dev URL.
+Use the `develop-idle-game` Playwright harness.
 
 Dev server port policy:
-- Start at `5180`
-- If occupied, increment until a free port is found
-- Allowed range: `5180–5189`
+- start at `5180`
+- if occupied, increment (`5181` ... `5189`)
+- if all are occupied, fail with a clear error
 
-Example (use the selected port):
+Harness command (use selected port):
 ```bash
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 export IDLE_GAME_CLIENT="$CODEX_HOME/skills/develop-idle-game/scripts/idle_game_playwright_client.js"
 node "$IDLE_GAME_CLIENT" --url http://localhost:5180 --actions-file ./e2e/action_payloads.json --scenario smoke
 ```
 
-Passing requirements:
-- The harness run exits `0`.
-- No console errors.
-- Expectations pass.
-- Determinism rerun check passes (enabled by default in the harness).
+Passing requirements for every harness run:
+- process exits `0`
+- no console errors/page errors
+- all `expect` steps pass
+- determinism rerun check passes (default enabled)
+- save roundtrip check passes (default enabled)
 
-## Harness contract (must implement in the web app)
+## 2) Pass Levels
 
-Expose on `window`:
+### Level A — Change Gate (after each meaningful change)
 
-1) `window.render_game_to_text(): string`
-- Returns a concise JSON string (raw values for assertions; avoid formatted currency strings).
-- Must include at minimum:
-  - `meta`: `{ version: string, nowMs: number, mode: "title" | "port" | "voyage" | string }`
-  - `resources`: `{ gold: string | number }` (integer-like)
+Run:
+- `smoke`
+- all affected subsystem scenarios
+- quality gates:
+  - `ui_overwhelm_guard`
+  - `progression_manual_to_auto`
+  - `quality_no_dead_time_early`
+  - `quality_unlock_avalanche_guard`
+
+### Level B — Completion Gate (before declaring done)
+
+Run all scenarios in `e2e/action_payloads.json` and ensure full green.
+
+Also run:
+- `pnpm check:determinism`
+- `pnpm check:saves`
+- `pnpm lint`
+- `pnpm build`
+
+## 3) Harness Contract (Required)
+
+The web app must expose:
+
+1. `window.render_game_to_text(): string`
+- concise JSON with raw assertion values (no formatted currency strings)
+- required minimum fields:
+  - `meta`: `{ version, nowMs, mode }`
+  - `resources`: includes `gold`
   - `unlocks`: `string[]`
-  - `economy`: `{ contracts: Array<{ commodityId: string, qty: string|number, filledQty: string|number, status: string }> }`
-  - `buffs`: `Array<{ id: string, remainingMs: number }>`
-  - `quality` (product-quality regression detectors):
-    - `quality.ui`: `{ mode, visibleModuleCount, visibleNavCount, visibleInteractiveCount, primaryActionCount, totalActionCount, tutorialStepId, lastUnlockDeltaModules, lastUnlockDeltaInteractives }`
-    - `quality.progression`: `{ goldPassivePerSec, goldManualActionAvailable, goldManualActionCount, automationUnlocked, nextGoalId }`
-    - `quality.pacing`: `{ manualActionId, manualActionImmediateReward, manualActionCooldownMs, meaningfulActionCount, timeToNextMeaningfulActionMs, idleGoldPerSec }`
-    - `quality.validation`: `{ ok: boolean, errors: string[], warnings: string[] }` (recommended)
+  - `economy.contracts[]`
+  - `buffs[]`
+  - `quality.ui`
+  - `quality.progression`
+  - `quality.pacing`
+  - `quality.validation` (recommended, currently expected by fixtures/checks)
+  - `quality.debug` (recommended; deterministic transition breadcrumbs)
 
-2) `window.advanceTime(ms: number): void | Promise<void>`
-- Deterministic stepping; does not depend on real-time rAF progression.
+2. `window.advanceTime(ms: number): void | Promise<void>`
+- deterministic stepping by exactly `ms`
+- tests must not depend on real-time rendering clocks
 
-3) `window.__idle` namespace:
+3. `window.__idle`
 ```js
 window.__idle = {
   version: "0.1.0",
@@ -54,125 +79,137 @@ window.__idle = {
   importSave(save: string): void,
   hardReset(): void,
   setSeed(seed: number): void,
-  validate?(): { ok: boolean, errors: string[], warnings: string[] }
+  validate?(): { ok: boolean, errors: string[], warnings: string[] },
+  debug?: {
+    getLog(): unknown,
+    clear(): void
+  }
 }
 ```
 
-## Required `data-testid` selectors (stable)
+## 4) Determinism And Save Semantics
 
-These IDs must exist once the corresponding UI exists. Do not rename them after adding.
+- no `Math.random()` / `Date.now()` in engine simulation logic
+- deterministic replay: same seed + same actions + same `advanceTime` -> same state subset
+- save payload must preserve simulation and RNG state needed for deterministic continuation
+- export/import roundtrip must not crash and must preserve critical state subset
+- automated tests must not rely on implicit wall-clock catch-up
 
-Global / nav:
+## 5) Selector Stability
+
+Stable selectors are contractual.
+
+At minimum, these must remain stable:
 - `start-new-game`
-- `nav-port`, `nav-voyage`, `nav-crew`, `nav-economy`, `nav-politics`
-
-Dock (onboarding):
+- `nav-port`, `nav-economy`, `nav-crew`, `nav-voyage`, `nav-politics`
 - `work-docks`
 - `upgrade-auto-dockwork`
-
-Economy (contracts):
 - `contracts-open`, `contracts-place`, `contracts-collect`
 - `contracts-commodity`, `contracts-qty`, `contracts-price`
-
-Minigame:
 - `minigame-cannon-open`, `minigame-cannon-start`
 
-## Milestone 1 — end-to-end vertical slice (must be automated)
+Additionally, any selector referenced in `e2e/action_payloads.json` is considered contractual once introduced.
 
-Each acceptance item is written so it can be verified with Playwright steps + state assertions.
-
-### AC-M1-001 Start a new game
-AUTO:
-- Scenario: `smoke`
-- Steps:
-  - click `[data-testid='start-new-game']`
-- Expect:
-  - `meta.mode` != `"title"` (or equals `"port"`, if you choose to be strict)
-
-### AC-M1-002 Idle gold increases deterministically
-AUTO:
-- Scenario: `smoke`
-- Steps:
-  - advance `5000ms`
-  - click `[data-testid='work-docks']`
-  - advance `5000ms`
-- Expect:
-  - `resources.gold` > `0`
-  - `meta.nowMs` >= `10000`
-
-### AC-M1-003 Save roundtrip is stable
-AUTO:
-- Enforced by the harness itself:
-  - export → hardReset → import must not crash
-  - subset equality must hold (resources/unlocks/location when present)
-
-### AC-M1-004 Determinism rerun passes
-AUTO:
-- Enforced by the harness itself (same seed + same scenario rerun ⇒ same subset state).
-
-### AC-M1-005 Contracts can be placed and progress deterministically
-AUTO:
-- Scenario: `contracts_basic`
-- Expected state shape (minimum for testing):
-  - `economy.contracts[0]` exists after placing
-  - `economy.contracts[0].filledQty` is `0` right after placing
-  - `economy.contracts[0].filledQty` increases after time advances
-
-### AC-M1-006 Cannon Volley minigame yields a visible result
-AUTO:
-- Scenario: `minigame_cannon_basic`
-- Expected:
-  - `buffs` contains `{ id: "cannon_volley" }`
-  - and its `remainingMs` is `> 0`
-
-## Product quality regression guards (must stay passing)
-
-These scenarios prevent silent regressions in onboarding clarity and manual→automation pacing.
+## 6) Quality Gates (Blocking)
 
 ### AC-PQ-001 UI overwhelm guard
-AUTO:
-- Scenario: `ui_overwhelm_guard`
-- Expected (immediately after starting a new game):
-  - `quality.ui.visibleModuleCount` <= `1`
-  - `quality.ui.primaryActionCount` <= `2`
-  - `quality.ui.totalActionCount` <= `6`
+Scenario: `ui_overwhelm_guard`
 
-### AC-PQ-002 Manual → automation progression exists
-AUTO:
-- Scenario: `progression_manual_to_auto`
-- Expected:
-  - Early: `quality.progression.goldPassivePerSec` == `0` and `resources.gold` does not increase under `advanceTime` alone
-  - After manual action: `resources.gold` increases deterministically
-- After buying first automation: `quality.progression.goldPassivePerSec` > `0` and gold increases under `advanceTime` without further manual actions
+Expected right after new game:
+- `quality.ui.visibleModuleCount <= 1`
+- `quality.ui.primaryActionCount <= 2`
+- `quality.ui.totalActionCount <= 6`
+
+### AC-PQ-002 Manual -> automation progression
+Scenario: `progression_manual_to_auto`
+
+Expected:
+- early: `quality.progression.goldPassivePerSec == 0`
+- early: `resources.gold` does not increase under idle `advanceTime` only
+- manual dock work increases gold deterministically
+- after dock automation: passive gold is positive and increases under `advanceTime`
 
 ### AC-PQ-003 No dead time (early)
-AUTO:
-- Scenario: `quality_no_dead_time_early`
-- Expected:
-  - `quality.pacing.meaningfulActionCount` >= `1` at `tut:dock_intro`
-  - `quality.pacing.timeToNextMeaningfulActionMs` == `0` at `tut:dock_intro`
-  - `quality.pacing.manualActionCooldownMs` <= `250`
-  - After clicking `[data-testid='work-docks']`: `quality.pacing.manualActionImmediateReward` == `true` and `resources.gold` > `0`
+Scenario: `quality_no_dead_time_early`
+
+Expected at `tut:dock_intro`:
+- `quality.pacing.meaningfulActionCount >= 1`
+- `quality.pacing.timeToNextMeaningfulActionMs == 0`
+- `quality.pacing.manualActionCooldownMs <= 250`
+- after clicking dock work: immediate reward signal remains true and gold increases
 
 ### AC-PQ-004 Unlock avalanche guard
-AUTO:
-- Scenario: `quality_unlock_avalanche_guard`
-- Expected (immediately after buying `[data-testid='upgrade-auto-dockwork']`):
-  - `quality.ui.lastUnlockDeltaModules` <= `2`
-  - `quality.ui.lastUnlockDeltaInteractives` <= `8`
-  - `quality.ui.visibleModuleCount` <= `2`
-  - `quality.ui.visibleInteractiveCount` <= `30`
+Scenario: `quality_unlock_avalanche_guard`
 
-## Actions file requirements
+Expected immediately after buying dock automation:
+- `quality.ui.lastUnlockDeltaModules <= 2`
+- `quality.ui.lastUnlockDeltaInteractives <= 8`
+- `quality.ui.visibleModuleCount <= 2`
+- `quality.ui.visibleInteractiveCount <= 30`
 
-The repo must provide `./e2e/action_payloads.json` with scenarios:
+## 7) Scenario Suites (Current Release)
+
+These suites define current release behavior. Each listed scenario must remain passing.
+
+### Suite A — Foundation
 - `smoke`
-- `contracts_basic`
-- `minigame_cannon_basic`
-- `ui_overwhelm_guard`
-- `progression_manual_to_auto`
-- `quality_no_dead_time_early`
-- `quality_unlock_avalanche_guard`
+- `mode_state_machine_transitions_basic`
+- `unlock_gates_phase0_basic`
+- `ui_quick_advance_basic`
 
-Use the step types supported by the harness (`click`, `fill`, `advance`, `expect`, ...).
-Each scenario must include at least one `expect` that proves progress occurred (not just navigation/clicks).
+### Suite B — Economy / Contracts
+- `contracts_basic`
+- `contracts_strategy_levers_basic`
+- `contracts_cancel_basic`
+- `politics_influence_from_contracts_basic`
+
+### Suite C — Voyage / Logistics
+- `voyage_prepare_basic`
+- `voyage_chart_unlock_basic`
+- `voyage_encounters_visible_basic`
+- `voyage_ship_speed_basic`
+- `phase0_loop`
+- `phase1_cannonballs_encounter`
+- `fun_phase1_first_voyage_loop`
+
+### Suite D — Minigames
+- `minigame_cannon_basic`
+- `minigame_cannon_spam_guard`
+- `phase2_rigging_run_efficiency`
+- `fun_phase3_minigame_loop_3runs`
+
+### Suite E — Politics / Sinks / Late Progression
+- `phase2_politics_tax_discount`
+- `politics_tax_relief_campaign_basic`
+- `phase2_cosmetics_vanity_signage`
+- `phase3_shipyard_upgrade_basic`
+- `phase3_fleet_automation_basic`
+- `phase3_conquest_basic`
+- `phase3_flagship_basic`
+- `unlock_ladder_basic`
+
+### Suite F — Offline / Save / Migration
+- `fun_phase4_offline_2h`
+- `fun_phase4_offline_8h`
+- `save_import_fresh_fixture`
+- `save_import_after_automation_fixture`
+- `save_import_after_contracts_fixture`
+- `save_import_after_cannon_fixture`
+- `save_import_after_starter_voyage_fixture`
+- `save_import_legacy_fixture`
+
+### Suite G — Playability Tours
+- `fun_phase0_first_5min`
+- `playability_tour_short`
+- `playability_audit_10min`
+- `playability_choice_pressure_midgame`
+- `playability_active_idle_leverage`
+
+## 8) Actions File Requirements
+
+The repo must provide `./e2e/action_payloads.json` containing all scenario IDs listed in this document.
+
+Each scenario must:
+- include at least one meaningful `expect`
+- prove progress or state transition (not click-only navigation)
+- remain deterministic under rerun

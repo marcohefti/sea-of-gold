@@ -56,6 +56,33 @@ import {
   SHIP_CLASS_BY_ID,
   VANITY_ITEMS,
 } from "@sea-of-gold/shared";
+import {
+  AlertTriangle,
+  Anchor,
+  CheckCircle2,
+  ChevronRight,
+  CircleDot,
+  Coins,
+  Compass,
+  Crosshair,
+  Flag,
+  FlaskConical,
+  Gem,
+  Hammer,
+  Lock,
+  Package,
+  Sailboat,
+  ScrollText,
+  Shield,
+  Sparkles,
+  Timer,
+  TrendingUp,
+  Users,
+  Warehouse as WarehouseGlyph,
+  Waves,
+  Wind,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,28 +93,115 @@ import { cn } from "@/lib/utils";
 
 type NavKey = "port" | "economy" | "crew" | "voyage" | "politics";
 
+const RESOURCE_GLYPH_BY_LABEL: Record<string, LucideIcon> = {
+  Gold: Coins,
+  Wood: Package,
+  Sugar: FlaskConical,
+  Rum: Gem,
+  Hemp: Wind,
+  Herbs: Sparkles,
+  Cosmetics: Gem,
+  Cannonballs: Crosshair,
+  Warehouse: WarehouseGlyph,
+};
+
+const NAV_GLYPH_BY_KEY: Record<NavKey, LucideIcon> = {
+  port: Anchor,
+  economy: TrendingUp,
+  crew: Users,
+  voyage: Sailboat,
+  politics: Flag,
+};
+
+function toSafeRatio(used: bigint, cap: bigint): number {
+  if (cap <= 0n) return 0;
+  const scaled = Number((used * 1000n) / cap);
+  return Math.max(0, Math.min(1, scaled / 1000));
+}
+
+function TinySparkline({ value }: { value: bigint }) {
+  const absValue = value < 0n ? -value : value;
+  const points: Array<[number, number]> = [0, 1, 2, 3, 4].map((idx) => {
+    const y = 2 + Number((absValue / BigInt(idx + 1)) % 7n);
+    return [idx * 4, 11 - y];
+  });
+  const path = points.map(([x, y], idx) => `${idx === 0 ? "M" : "L"} ${x} ${y}`).join(" ");
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 12" className="h-3.5 w-4.5 text-[color:var(--sog-accent)]">
+      <path d={path} fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.35" />
+    </svg>
+  );
+}
+
+function StorageRing({ used, cap }: { used: bigint; cap: bigint }) {
+  const ratio = toSafeRatio(used, cap);
+  const circumference = 2 * Math.PI * 7;
+  const tone = ratio >= 0.95 ? "var(--sog-danger)" : ratio >= 0.8 ? "var(--sog-warning)" : "var(--sog-positive)";
+  return (
+    <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4">
+      <circle cx="9" cy="9" r="7" fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="2" />
+      <circle
+        cx="9"
+        cy="9"
+        r="7"
+        fill="none"
+        stroke={tone}
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - ratio)}
+        strokeLinecap="round"
+        strokeWidth="2"
+        transform="rotate(-90 9 9)"
+      />
+    </svg>
+  );
+}
+
+function HarborSigil({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 64 64" className={cn("sog-svg-frame h-16 w-16 text-[color:var(--sog-accent)]", className)}>
+      <defs>
+        <linearGradient id="sogSigilFill" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="rgba(210,162,74,0.95)" />
+          <stop offset="100%" stopColor="rgba(76,175,115,0.85)" />
+        </linearGradient>
+      </defs>
+      <circle cx="32" cy="32" r="28" fill="none" opacity="0.25" stroke="url(#sogSigilFill)" strokeWidth="1.5" />
+      <path d="M17 36c3 2 6 2 9 0s6-2 9 0 6 2 9 0 6-2 9 0" fill="none" opacity="0.9" stroke="url(#sogSigilFill)" strokeLinecap="round" strokeWidth="2" />
+      <path d="M21 44c2 1.5 4.5 1.5 6.5 0s4.5-1.5 6.5 0 4.5 1.5 6.5 0 4.5-1.5 6.5 0" fill="none" opacity="0.65" stroke="url(#sogSigilFill)" strokeLinecap="round" strokeWidth="1.6" />
+      <path d="M32 15v17M24 23h16" fill="none" opacity="0.95" stroke="url(#sogSigilFill)" strokeLinecap="round" strokeWidth="2.2" />
+      <circle cx="32" cy="23" r="2.8" fill="url(#sogSigilFill)" />
+    </svg>
+  );
+}
+
 function GoldPill({ gold }: { gold: bigint }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1 text-sm text-zinc-100">
-      <span className="text-zinc-400">Gold</span>
+    <div className="sog-surface-muted flex items-center gap-2 rounded-md px-2.5 py-1 text-sm text-zinc-100">
+      <Coins aria-hidden="true" className="h-3.5 w-3.5 text-[color:var(--sog-accent)]" />
+      <span className="text-zinc-300">Gold</span>
       <span className="font-semibold tabular-nums">{gold.toString(10)}</span>
+      <TinySparkline value={gold} />
     </div>
   );
 }
 
 function ResourcePill({ label, value }: { label: string; value: bigint }) {
+  const Glyph = RESOURCE_GLYPH_BY_LABEL[label] || CircleDot;
   return (
-    <div className="flex items-center gap-2 rounded-md border border-zinc-900 bg-black px-3 py-1 text-sm text-zinc-100">
-      <span className="text-zinc-500">{label}</span>
+    <div className="sog-surface-muted flex items-center gap-2 rounded-md px-2.5 py-1 text-sm text-zinc-100">
+      <Glyph aria-hidden="true" className="h-3.5 w-3.5 text-zinc-300" />
+      <span className="text-zinc-400">{label}</span>
       <span className="font-medium tabular-nums">{value.toString(10)}</span>
+      <TinySparkline value={value} />
     </div>
   );
 }
 
 function WarehousePill({ used, cap }: { used: bigint; cap: bigint }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-zinc-900 bg-black px-3 py-1 text-sm text-zinc-100">
-      <span className="text-zinc-500">Warehouse</span>
+    <div className="sog-surface-muted flex items-center gap-2 rounded-md px-2.5 py-1 text-sm text-zinc-100">
+      <StorageRing used={used} cap={cap} />
+      <span className="text-zinc-300">Warehouse</span>
       <span className="font-medium tabular-nums">
         {used.toString(10)}/{cap.toString(10)}
       </span>
@@ -109,7 +223,8 @@ function formatDurationCompact(ms: number): string {
 function BuffsPill({ buffs }: { buffs: GameState["buffs"] }) {
   if (buffs.length === 0)
     return (
-      <div className="whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1 text-sm text-zinc-400">
+      <div className="sog-surface-muted flex items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-1 text-sm text-zinc-400">
+        <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
         No active buffs
       </div>
     );
@@ -119,8 +234,9 @@ function BuffsPill({ buffs }: { buffs: GameState["buffs"] }) {
       {buffs.map((b) => (
         <div
           key={b.id}
-          className="whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1 text-sm text-zinc-100"
+          className="sog-surface-muted sog-animate-in flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-sm text-zinc-100"
         >
+          <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-[color:var(--sog-accent)]" />
           <span className="font-medium">{b.id}</span>{" "}
           <span className="text-zinc-400 tabular-nums">{formatDurationCompact(b.remainingMs)}</span>
         </div>
@@ -132,7 +248,8 @@ function BuffsPill({ buffs }: { buffs: GameState["buffs"] }) {
 function PortPerkPill({ perk }: { perk: { id: string; remainingMs: number; taxDiscountBps: number } | null }) {
   if (!perk || perk.remainingMs <= 0) return null;
   return (
-    <div className="whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1 text-sm text-zinc-100">
+    <div className="sog-surface-muted sog-animate-pulse flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-sm text-zinc-100">
+      <Shield aria-hidden="true" className="h-3.5 w-3.5 text-[color:var(--sog-positive)]" />
       <span className="font-medium">perk:{perk.id}</span>{" "}
       <span className="text-zinc-400 tabular-nums">{formatDurationCompact(perk.remainingMs)}</span>
     </div>
@@ -153,6 +270,10 @@ function TitleScreen({
     <div className="min-h-screen bg-gradient-to-b from-zinc-950 to-black text-zinc-100">
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 py-10">
         <div className="w-full max-w-xl">
+          <div className="mb-4 flex items-center gap-4">
+            <HarborSigil className="sog-animate-float" />
+            <div className="sog-kicker">Deterministic Captaincy</div>
+          </div>
           <h1 className="text-4xl font-semibold tracking-tight">Sea of Gold</h1>
           <p className="mt-3 text-sm leading-6 text-zinc-400">
             Single-player idle captaincy. Deterministic simulation. Voyages soon.
@@ -160,6 +281,7 @@ function TitleScreen({
 
           <div className="mt-8 flex items-center gap-3">
             <Button data-testid="start-new-game" onClick={onStart}>
+              <Compass aria-hidden="true" className="h-4 w-4" />
               Start New Game
             </Button>
             <div className="text-xs text-zinc-500">
@@ -263,9 +385,12 @@ function DockIntroPanel({
       : 0;
 
   return (
-    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
+    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100 sog-animate-in">
       <CardHeader>
-        <CardTitle>Dock</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Anchor aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Dock
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="grid gap-1 text-sm text-zinc-300">
@@ -287,15 +412,18 @@ function DockIntroPanel({
         </div>
 
         <div className="grid gap-2 rounded-md border border-zinc-800 bg-black p-3">
-          <div className="text-sm font-medium text-zinc-100">Work the docks</div>
+          <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-100">
+            <Hammer aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+            Work the docks
+          </div>
           <div className="text-xs text-zinc-500">
             Start a short shift to earn your first gold. Gold will not increase unless you work or automate.{" "}
             <span className="text-zinc-400">Tip:</span> while a shift is running, click{" "}
             <span className="text-zinc-200">Hustle</span> to finish sooner (same pay).
           </div>
           {working ? (
-            <div className="mt-1 h-2 w-full overflow-hidden rounded-full border border-zinc-800 bg-zinc-950">
-              <div className="h-full bg-emerald-500/70" style={{ width: `${Math.round(workProgressPct * 100)}%` }} />
+            <div className="sog-progress-track mt-1 h-2 w-full">
+              <div className="sog-progress-fill sog-animate-shimmer h-full" style={{ width: `${Math.round(workProgressPct * 100)}%` }} />
             </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
@@ -308,7 +436,10 @@ function DockIntroPanel({
         </div>
 
         <div className="grid gap-2 rounded-md border border-zinc-800 bg-black p-3">
-          <div className="text-sm font-medium text-zinc-100">Automate dockwork</div>
+          <div className="flex items-center gap-1.5 text-sm font-medium text-zinc-100">
+            <TrendingUp aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-positive)]" />
+            Automate dockwork
+          </div>
           <div className="text-xs text-zinc-500">
             Cost: <span className="tabular-nums text-zinc-200">{automateCost.toString(10)}g</span>. Enables passive gold
             and unlocks Economy. More systems unlock as you place contracts and produce Rum.
@@ -324,7 +455,8 @@ function DockIntroPanel({
               {state.dock.passiveEnabled ? "Purchased" : "Buy Automation"}
             </Button>
             {!state.dock.passiveEnabled && !canBuyAutomation ? (
-              <div className="text-xs text-zinc-500">
+              <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 text-[color:var(--sog-warning)]" />
                 Need{" "}
                 <span className="tabular-nums text-zinc-200">
                   {(automateCost - state.resources.gold).toString(10)}
@@ -341,9 +473,12 @@ function DockIntroPanel({
 
 function EconomyIntroPanel({ onOpenEconomy }: { onOpenEconomy: () => void }) {
   return (
-    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
+    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100 sog-animate-in">
       <CardHeader>
-        <CardTitle>Next: Economy</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Next: Economy
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="text-sm text-zinc-300">
@@ -351,11 +486,451 @@ function EconomyIntroPanel({ onOpenEconomy }: { onOpenEconomy: () => void }) {
           collected goods land in your <span className="text-zinc-200">warehouse</span>.
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={onOpenEconomy}>Open Economy</Button>
+          <Button onClick={onOpenEconomy}>
+            <TrendingUp aria-hidden="true" className="h-4 w-4" />
+            Open Economy
+          </Button>
           <div className="text-xs text-zinc-500">
             Tip: place your first contract to unlock <span className="text-zinc-200">Cannon Volley</span> and the{" "}
             <span className="text-zinc-200">Distillery</span>.
           </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+type CommandAction = {
+  id: string;
+  label: string;
+  hint: string;
+  onClick: () => void;
+  disabled?: boolean;
+};
+
+function getUnlockedRoutesFromCurrentPort(state: GameState): string[] {
+  const portId = state.location.islandId;
+  return ROUTES.filter((route) => route.fromIslandId === portId && state.unlocks.includes(`route:${route.id}`)).map((route) => route.id);
+}
+
+function renderCommandActionIcon(actionId: string, className: string) {
+  if (actionId.includes("economy") || actionId.includes("contract")) return <TrendingUp aria-hidden="true" className={className} />;
+  if (actionId.includes("voyage")) return <Sailboat aria-hidden="true" className={className} />;
+  if (actionId.includes("cannon")) return <Crosshair aria-hidden="true" className={className} />;
+  if (actionId.includes("politics")) return <Flag aria-hidden="true" className={className} />;
+  if (actionId.includes("work") || actionId.includes("automation")) return <Anchor aria-hidden="true" className={className} />;
+  return <Compass aria-hidden="true" className={className} />;
+}
+
+function formatDebugEventLabel(event: unknown): string {
+  if (!event || typeof event !== "object") return "Unknown event";
+  const kind = typeof (event as { kind?: unknown }).kind === "string" ? (event as { kind: string }).kind : "unknown";
+
+  if (kind === "action") {
+    const action = (event as { action?: { type?: unknown } }).action;
+    const t = action && typeof action.type === "string" ? action.type : "ACTION";
+    return `Command: ${t}`;
+  }
+  if (kind === "status") {
+    const system = typeof (event as { system?: unknown }).system === "string" ? (event as { system: string }).system : "system";
+    const from = typeof (event as { from?: unknown }).from === "string" ? (event as { from: string }).from : "prev";
+    const to = typeof (event as { to?: unknown }).to === "string" ? (event as { to: string }).to : "next";
+    return `${system} changed ${from} -> ${to}`;
+  }
+  if (kind === "unlock") {
+    const added = Array.isArray((event as { added?: unknown[] }).added) ? (event as { added: unknown[] }).added : [];
+    return added.length > 0 ? `Unlocked ${added.length} item${added.length > 1 ? "s" : ""}` : "Unlock event";
+  }
+  if (kind === "advance") {
+    const msRaw = (event as { ms?: unknown }).ms;
+    const ms = typeof msRaw === "number" && Number.isFinite(msRaw) ? msRaw : 0;
+    return `Simulation advanced ${formatDurationCompact(ms)}`;
+  }
+  return "Event";
+}
+
+function getDebugEventIcon(event: unknown): LucideIcon {
+  if (!event || typeof event !== "object") return ScrollText;
+  const kind = typeof (event as { kind?: unknown }).kind === "string" ? (event as { kind: string }).kind : "unknown";
+  if (kind === "action") return Timer;
+  if (kind === "status") return CheckCircle2;
+  if (kind === "unlock") return Sparkles;
+  if (kind === "advance") return Sailboat;
+  return ScrollText;
+}
+
+function getDebugEventToneClass(event: unknown): string {
+  if (!event || typeof event !== "object") return "text-zinc-300";
+  const kind = typeof (event as { kind?: unknown }).kind === "string" ? (event as { kind: string }).kind : "unknown";
+  if (kind === "unlock") return "text-emerald-200";
+  if (kind === "status") return "text-[color:var(--sog-accent)]";
+  if (kind === "action") return "text-zinc-200";
+  if (kind === "advance") return "text-zinc-300";
+  return "text-zinc-300";
+}
+
+function CommandDeckPanel({
+  state,
+  activeNav,
+  onOpenNav,
+  onWork,
+  onBuyAutomation,
+  onCollectContracts,
+  onPrepareVoyage,
+  onStartVoyage,
+  onCollectVoyage,
+  onOpenCannon,
+}: {
+  state: GameState;
+  activeNav: NavKey;
+  onOpenNav: (nav: NavKey) => void;
+  onWork: () => void;
+  onBuyAutomation: () => void;
+  onCollectContracts: () => void;
+  onPrepareVoyage: (routeId: string) => void;
+  onStartVoyage: (routeId: string) => void;
+  onCollectVoyage: () => void;
+  onOpenCannon: () => void;
+}) {
+  const goals = getNextGoalsForUi(state);
+  const highlightedGoal = goals[0] || "Build a stronger voyage economy.";
+  const dockAutomateCost = getDockAutomateCostGoldForUi();
+  const contractsHere = state.economy.contracts.filter(
+    (c) => c.portId === state.location.islandId && (c.status === "open" || c.status === "filled")
+  );
+  const collectableContracts = contractsHere.filter((c) => c.filledQty > c.collectedQty).length;
+  const routeIds = getUnlockedRoutesFromCurrentPort(state);
+  const primaryRouteId = routeIds[0] || null;
+  const primaryReq = primaryRouteId ? getVoyageStartRequirements(state, state.ship.classId, primaryRouteId) : null;
+  const hasRumForPrimary = primaryReq ? state.storage.shipHold.inv.rum >= primaryReq.totalRum : false;
+  const hasCannonBuff = state.buffs.some((b) => b.id === "cannon_volley" && b.remainingMs > 0);
+
+  const primaryAction = (() => {
+    if (state.tutorial.stepId === "tut:dock_intro") {
+      if (!state.dock.passiveEnabled && state.resources.gold >= dockAutomateCost) {
+        return {
+          id: "buy-automation",
+          label: "Buy Dock Automation",
+          hint: "Enable passive gold and unlock Economy.",
+          onClick: onBuyAutomation,
+        } satisfies CommandAction;
+      }
+      return {
+        id: "work-docks",
+        label: state.dock.workRemainingMs > 0 ? "Hustle Shift" : "Work Shift",
+        hint: "Manual action keeps early pacing tight.",
+        onClick: onWork,
+      } satisfies CommandAction;
+    }
+
+    if (state.unlocks.includes("economy") && contractsHere.length === 0) {
+      if (activeNav !== "economy") {
+        return {
+          id: "open-economy",
+          label: "Open Economy",
+          hint: "Place a contract to feed production loops.",
+          onClick: () => onOpenNav("economy"),
+        } satisfies CommandAction;
+      }
+      return {
+        id: "place-contract",
+        label: "Place Contract",
+        hint: "Use quantity + bid to control fills and fees.",
+        onClick: () => {},
+        disabled: true,
+      } satisfies CommandAction;
+    }
+
+    if (collectableContracts > 0) {
+      if (activeNav !== "economy") {
+        return {
+          id: "go-economy-collect",
+          label: "Collect Contracts",
+          hint: `${collectableContracts} contract${collectableContracts > 1 ? "s" : ""} ready at this port.`,
+          onClick: () => onOpenNav("economy"),
+        } satisfies CommandAction;
+      }
+      return {
+        id: "collect-contracts",
+        label: "Collect Contracts",
+        hint: "Move filled goods into warehouse inventory.",
+        onClick: onCollectContracts,
+      } satisfies CommandAction;
+    }
+
+    if (state.voyage.status === "completed") {
+      if (activeNav !== "voyage") {
+        return {
+          id: "go-voyage-collect",
+          label: "Collect Voyage",
+          hint: "Bank pending rewards and trigger route unlocks.",
+          onClick: () => onOpenNav("voyage"),
+        } satisfies CommandAction;
+      }
+      return {
+        id: "voyage-collect",
+        label: "Collect Voyage",
+        hint: "Claim gold and influence from the completed route.",
+        onClick: onCollectVoyage,
+      } satisfies CommandAction;
+    }
+
+    if (state.unlocks.includes("voyage") && primaryRouteId && state.voyage.status === "idle") {
+      if (!hasRumForPrimary) {
+        return {
+          id: "prep-rum",
+          label: "Prepare Hold Supplies",
+          hint: `Load rum/cannonballs for ${ROUTE_BY_ID[primaryRouteId]?.name ?? primaryRouteId}.`,
+          onClick: () => onPrepareVoyage(primaryRouteId),
+        } satisfies CommandAction;
+      }
+
+      if (activeNav !== "voyage") {
+        return {
+          id: "go-voyage",
+          label: "Open Voyage",
+          hint: "Route supplies into gold and influence.",
+          onClick: () => onOpenNav("voyage"),
+        } satisfies CommandAction;
+      }
+
+      return {
+        id: "start-voyage",
+        label: "Start Voyage",
+        hint: `Launch ${ROUTE_BY_ID[primaryRouteId]?.name ?? primaryRouteId} now.`,
+        onClick: () => onStartVoyage(primaryRouteId),
+      } satisfies CommandAction;
+    }
+
+    if (state.unlocks.includes("minigame:cannon") && !hasCannonBuff) {
+      return {
+        id: "open-cannon",
+        label: "Play Cannon Volley",
+        hint: "Active play banks a voyage payout buff.",
+        onClick: onOpenCannon,
+      } satisfies CommandAction;
+    }
+
+    if (state.unlocks.includes("politics") && state.politics.affiliationFlagId === "player") {
+      return {
+        id: "open-politics",
+        label: "Choose Affiliation",
+        hint: "Pick a faction to unlock influence progression.",
+        onClick: () => onOpenNav("politics"),
+      } satisfies CommandAction;
+    }
+
+    return {
+      id: "open-port",
+      label: "Review Port",
+      hint: "Check goals, storage pressure, and sinks.",
+      onClick: () => onOpenNav("port"),
+    } satisfies CommandAction;
+  })();
+
+  const quickActions: CommandAction[] = [];
+  if (state.unlocks.includes("economy")) {
+    quickActions.push({
+      id: "quick-economy",
+      label: "Economy",
+      hint: "Contracts and market levers.",
+      onClick: () => onOpenNav("economy"),
+    });
+  }
+  if (state.unlocks.includes("voyage")) {
+    quickActions.push({
+      id: "quick-voyage",
+      label: "Voyage",
+      hint: "Run routes with stocked hold.",
+      onClick: () => onOpenNav("voyage"),
+    });
+  }
+  if (state.unlocks.includes("politics")) {
+    quickActions.push({
+      id: "quick-politics",
+      label: "Politics",
+      hint: "Influence, campaigns, conquest.",
+      onClick: () => onOpenNav("politics"),
+    });
+  }
+  return (
+    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100 sog-animate-in">
+      <CardHeader>
+        <div className="sog-kicker flex items-center gap-1.5">
+          <Compass aria-hidden="true" className="h-3.5 w-3.5" />
+          Command Deck
+        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Anchor aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Primary Objective
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <div className="rounded-md border border-zinc-800 bg-black/70 px-3 py-2 text-sm text-zinc-200">{highlightedGoal}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            data-testid="command-primary-action"
+            className="sog-animate-pulse"
+            onClick={primaryAction.onClick}
+            disabled={primaryAction.disabled}
+          >
+            {renderCommandActionIcon(primaryAction.id, "h-4 w-4")}
+            {primaryAction.label}
+          </Button>
+          <div className="text-xs text-zinc-500">{primaryAction.hint}</div>
+        </div>
+        {quickActions.length > 0 ? (
+          <div className="grid gap-2 border-t border-zinc-900 pt-3">
+            <div className="sog-kicker">Quick Access</div>
+            <div className="flex flex-wrap gap-2">
+              {quickActions.map((item) => (
+                <Button key={item.id} variant="secondary" className="bg-zinc-950 text-zinc-100 hover:bg-zinc-900" onClick={item.onClick}>
+                  {renderCommandActionIcon(item.id, "h-3.5 w-3.5")}
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function CaptainsLogPanel({ events }: { events: unknown[] }) {
+  const rows = events.slice(-8).reverse();
+  return (
+    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100 sog-animate-in">
+      <CardHeader>
+        <div className="sog-kicker flex items-center gap-1.5">
+          <ScrollText aria-hidden="true" className="h-3.5 w-3.5" />
+          Session Feedback
+        </div>
+        <CardTitle className="flex items-center gap-2">
+          <ScrollText aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Captain’s Log
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-2 text-sm text-zinc-300">
+        {rows.length === 0 ? (
+          <div className="rounded-md border border-zinc-800 bg-black/70 px-3 py-2 text-zinc-500">
+            No notable events yet. Start actions to populate the log.
+          </div>
+        ) : (
+          rows.map((event, index) => {
+            const EventIcon = getDebugEventIcon(event);
+            return (
+              <div key={index} className="sog-animate-in flex items-center gap-2 rounded-md border border-zinc-800 bg-black/70 px-3 py-2">
+                <EventIcon aria-hidden="true" className={cn("h-3.5 w-3.5", getDebugEventToneClass(event))} />
+                <span className={cn("text-sm", getDebugEventToneClass(event))}>{formatDebugEventLabel(event)}</span>
+              </div>
+            );
+          })
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MidgameScalingPanel({ state }: { state: GameState }) {
+  const portId = state.location.islandId;
+  const wh = state.storage.warehouses[portId];
+  const hold = state.storage.shipHold;
+  const holdRum = hold.inv.rum;
+  const unlockedRoutes = ROUTES.filter((route) => route.fromIslandId === portId && state.unlocks.includes(`route:${route.id}`));
+  const routeRequirements = unlockedRoutes
+    .map((route) => getVoyageStartRequirements(state, state.ship.classId, route.id))
+    .filter((req): req is NonNullable<ReturnType<typeof getVoyageStartRequirements>> => !!req);
+  const startableRouteCount = routeRequirements.filter((req) => holdRum >= req.totalRum).length;
+  const minRumNeeded =
+    routeRequirements.length > 0
+      ? routeRequirements.reduce((min, req) => (req.totalRum < min ? req.totalRum : min), routeRequirements[0].totalRum)
+      : 0n;
+  const rumGap = holdRum >= minRumNeeded ? 0n : minRumNeeded - holdRum;
+  const missingRumRouteCount = routeRequirements.filter((req) => holdRum < req.totalRum).length;
+
+  const chartsFromPort = CHARTS.filter((chart) => ROUTE_BY_ID[chart.routeId]?.fromIslandId === portId);
+  const chartUnlocksFromPort = chartsFromPort.filter(
+    (chart) => !state.unlocks.includes(chart.id) && !state.unlocks.includes(`route:${chart.routeId}`)
+  );
+  const affordableChartCount = chartUnlocksFromPort.filter((chart) => state.resources.gold >= getChartCostGoldForUi(chart.id)).length;
+
+  const globalUnlockedRouteCount = state.unlocks.filter((id) => id.startsWith("route:")).length;
+  const currentPortTotalRouteCount = ROUTES.filter((route) => route.fromIslandId === portId).length;
+
+  const warehouseUsed = wh ? invUsed(wh.inv) : 0n;
+  const warehouseCap = wh?.cap ?? 0n;
+  const holdUsed = invUsed(hold.inv);
+  const warehouseFillPct = warehouseCap > 0n ? Number((warehouseUsed * 100n) / warehouseCap) : 0;
+  const holdFillPct = hold.cap > 0n ? Number((holdUsed * 100n) / hold.cap) : 0;
+
+  const flow = getPortGoldFlowPerMinForUi(state);
+  const bottlenecks: string[] = [];
+  if (state.voyage.status === "idle" && unlockedRoutes.length > 0 && startableRouteCount === 0) {
+    if (rumGap > 0n) bottlenecks.push(`Voyage stall: load ${rumGap.toString(10)} rum into hold.`);
+    else bottlenecks.push("Voyage stall: produce rum and refill hold.");
+  }
+  if (flow.netGoldPerMin < 0n) {
+    bottlenecks.push(`Net negative: ${flow.netGoldPerMin.toString(10)} gold/min after crew wages.`);
+  }
+  if (warehouseFillPct >= 85) {
+    bottlenecks.push(`Warehouse pressure: ${warehouseFillPct}% full (contracts may clog).`);
+  }
+  if (affordableChartCount > 0) {
+    bottlenecks.push(`Expansion ready: ${affordableChartCount} chart unlock${affordableChartCount > 1 ? "s" : ""} affordable.`);
+  }
+  if (bottlenecks.length === 0) {
+    bottlenecks.push("No immediate bottleneck. Keep voyages cycling and invest in sinks/expansion.");
+  }
+
+  return (
+    <Card data-testid="midgame-scaling-radar" className="border-zinc-900 bg-zinc-950/30 text-zinc-100 sog-animate-in">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Midgame Scaling Radar
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">Routes</div>
+            <div className="mt-1 text-zinc-200 tabular-nums">
+              Global unlocked {globalUnlockedRouteCount} · here {unlockedRoutes.length}/{currentPortTotalRouteCount}
+            </div>
+            <div className="mt-1 text-zinc-400 tabular-nums">
+              Startable {startableRouteCount} · blocked by rum {missingRumRouteCount}
+            </div>
+            <div className="mt-1 text-zinc-500 tabular-nums">
+              Min rum need {minRumNeeded.toString(10)} · gap {rumGap.toString(10)}
+            </div>
+          </div>
+          <div className="rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">Economy Pressure</div>
+            <div className="mt-1 text-zinc-200 tabular-nums">
+              Net {flow.netGoldPerMin >= 0n ? "+" : ""}
+              {flow.netGoldPerMin.toString(10)} gold/min
+            </div>
+            <div className="mt-1 text-zinc-400 tabular-nums">
+              Warehouse {warehouseUsed.toString(10)}/{warehouseCap.toString(10)} ({warehouseFillPct}%)
+            </div>
+            <div className="mt-1 text-zinc-500 tabular-nums">
+              Hold {holdUsed.toString(10)}/{hold.cap.toString(10)} ({holdFillPct}%)
+            </div>
+          </div>
+          <div className="rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm sm:col-span-2">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">Expansion Window</div>
+            <div className="mt-1 text-zinc-200 tabular-nums">
+              Charts pending {chartUnlocksFromPort.length} · affordable {affordableChartCount}
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-2">
+          {bottlenecks.map((item, idx) => (
+            <div key={idx} className="rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm text-zinc-300">
+              {item}
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -441,6 +1016,7 @@ function DebugDispatchPanel({
 function NavButton({
   active,
   testId,
+  icon: Icon,
   children,
   onClick,
   disabled,
@@ -448,6 +1024,7 @@ function NavButton({
 }: {
   active: boolean;
   testId: string;
+  icon: LucideIcon;
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
@@ -457,14 +1034,28 @@ function NavButton({
     <Button
       data-testid={testId}
       variant={active ? "default" : "secondary"}
-      className={cn("w-full justify-start", active ? "" : "bg-zinc-950 text-zinc-100 hover:bg-zinc-900")}
+      className={cn(
+        "w-full justify-start",
+        active ? "sog-nav-active border-[color:var(--sog-accent-soft)]" : "bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
+      )}
       disabled={disabled}
       title={disabled ? lockedReason : undefined}
       onClick={disabled ? () => {} : onClick}
     >
       <span className="flex w-full items-center justify-between gap-2">
-        <span>{children}</span>
-        {disabled ? <span className="rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300">Locked</span> : null}
+        <span className="flex items-center gap-2">
+          <Icon aria-hidden="true" className="h-3.5 w-3.5 opacity-90" />
+          <span>{children}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          {active ? <ChevronRight aria-hidden="true" className="h-3.5 w-3.5 text-[color:var(--sog-accent)]" /> : null}
+          {disabled ? (
+            <span className="flex items-center gap-1 rounded bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300">
+              <Lock aria-hidden="true" className="h-3 w-3" />
+              Locked
+            </span>
+          ) : null}
+        </span>
       </span>
     </Button>
   );
@@ -472,12 +1063,14 @@ function NavButton({
 
 function EconomyPanel({
   state,
+  debugUi,
   onPlace,
   onCollectAll,
   onCancel,
   onCollectOne,
 }: {
   state: GameState;
+  debugUi: boolean;
   onPlace: (commodityId: string, qty: string, bidPrice: string) => void;
   onCollectAll: () => void;
   onCancel: (contractId: string) => void;
@@ -751,6 +1344,7 @@ function EconomyPanel({
               {visibleContracts.map((c) => {
                 const available = c.filledQty - c.collectedQty;
                 const prio = c.status === "open" ? (priorityRankById.get(c.id) ?? 0) : 0;
+                const commodityName = COMMODITY_BY_ID[c.commodityId]?.name ?? c.commodityId;
 
                 return (
                   <div
@@ -758,15 +1352,15 @@ function EconomyPanel({
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-zinc-100">{c.commodityId}</span>
-                      <span className="text-zinc-500">#{c.id}</span>
+                      <span className="font-medium text-zinc-100">{commodityName}</span>
+                      {debugUi ? <span className="text-zinc-500">#{c.id}</span> : null}
                       {scope === "all" ? <span className="text-xs text-zinc-500">{c.portId}</span> : null}
-                      {prio > 0 ? (
+                      {debugUi && prio > 0 ? (
                         <span className="text-xs text-zinc-500 tabular-nums" title="Higher bids fill first for this port+commodity.">
                           prio {prio}
                         </span>
                       ) : null}
-                      {prio > 1 ? (
+                      {debugUi && prio > 1 ? (
                         <span className="text-xs text-amber-200" title="Lower priority bids may not receive supply until higher bids are satisfied.">
                           behind {prio - 1}
                         </span>
@@ -842,9 +1436,12 @@ function CannonPanel({
   const runBonusPct = Math.max(0, Math.round((runPowerBps - 10_000) / 100));
 
   return (
-    <Card className="border-zinc-800 bg-zinc-950 text-zinc-100">
+    <Card className="border-zinc-800 bg-zinc-950 text-zinc-100 sog-animate-in">
       <CardHeader className="flex flex-row items-start justify-between gap-2">
-        <CardTitle>Cannon Volley</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Crosshair aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Cannon Volley
+        </CardTitle>
         <Button
           data-testid="minigame-cannon-close"
           variant="secondary"
@@ -875,16 +1472,17 @@ function CannonPanel({
 
         <div className="mt-3 rounded-md border border-zinc-800 bg-black p-3">
           <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>
+            <span className="flex items-center gap-1.5">
+              <Timer aria-hidden="true" className="h-3.5 w-3.5" />
               Status: <span className="text-zinc-100">{mg.status}</span>
             </span>
             <span className="tabular-nums">
               {mg.elapsedMs} / {mg.durationMs}ms
             </span>
           </div>
-          <div className="mt-2 h-3 w-full overflow-hidden rounded bg-zinc-900">
+          <div className="sog-progress-track mt-2 h-3 w-full">
             <div
-              className={cn("h-full", inZone ? "bg-amber-400" : "bg-zinc-400")}
+              className={cn("h-full", inZone ? "sog-progress-fill sog-animate-shimmer" : "bg-zinc-400")}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -904,7 +1502,8 @@ function CannonPanel({
         ) : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button data-testid="minigame-cannon-start" disabled={startDisabled} onClick={onStart}>
+          <Button data-testid="minigame-cannon-start" className="sog-animate-pulse" disabled={startDisabled} onClick={onStart}>
+            <Timer aria-hidden="true" className="h-4 w-4" />
             Start ({durationS}s)
           </Button>
           <Button
@@ -913,6 +1512,7 @@ function CannonPanel({
             className="bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
             onClick={onFire}
           >
+            <Crosshair aria-hidden="true" className="h-4 w-4" />
             Fire
           </Button>
         </div>
@@ -955,9 +1555,12 @@ function RiggingPanel({
   const durationS = Math.round(getRiggingRunDurationMsForUi() / 1000);
 
   return (
-    <Card className="border-zinc-800 bg-zinc-950 text-zinc-100">
+    <Card className="border-zinc-800 bg-zinc-950 text-zinc-100 sog-animate-in">
       <CardHeader className="flex flex-row items-start justify-between gap-2">
-        <CardTitle>Rigging Run</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Wind aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Rigging Run
+        </CardTitle>
         <Button
           data-testid="minigame-rigging-close"
           variant="secondary"
@@ -976,20 +1579,21 @@ function RiggingPanel({
 
         <div className="mt-3 rounded-md border border-zinc-800 bg-black p-3">
           <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>
+            <span className="flex items-center gap-1.5">
+              <Timer aria-hidden="true" className="h-3.5 w-3.5" />
               Status: <span className="text-zinc-100">{mg.status}</span>
             </span>
             <span className="tabular-nums">
               {mg.elapsedMs} / {mg.durationMs}ms
             </span>
           </div>
-          <div className="mt-2 relative h-3 w-full overflow-hidden rounded bg-zinc-900">
+          <div className="sog-progress-track mt-2 relative h-3 w-full">
             <div
               className="absolute top-0 h-full bg-emerald-400/30"
               style={{ left: `${zoneStartPct}%`, width: `${zoneWidthPct}%` }}
             />
             <div
-              className={cn("absolute top-0 h-full w-1", inZone ? "bg-emerald-400" : "bg-zinc-200")}
+              className={cn("absolute top-0 h-full w-1", inZone ? "bg-emerald-400 sog-animate-pulse" : "bg-zinc-200")}
               style={{ left: `${phasePct}%` }}
             />
           </div>
@@ -1002,7 +1606,8 @@ function RiggingPanel({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button data-testid="minigame-rigging-start" disabled={startDisabled} onClick={onStart}>
+          <Button data-testid="minigame-rigging-start" className="sog-animate-pulse" disabled={startDisabled} onClick={onStart}>
+            <Timer aria-hidden="true" className="h-4 w-4" />
             Start ({durationS}s)
           </Button>
           <Button
@@ -1011,6 +1616,7 @@ function RiggingPanel({
             className="bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
             onClick={onTug}
           >
+            <Wind aria-hidden="true" className="h-4 w-4" />
             Tug
           </Button>
         </div>
@@ -1838,12 +2444,23 @@ function VoyagePanel({
   const routesFromHere = ROUTES.filter((r) => r.fromIslandId === portId);
   const isUnlocked = (routeId: string) => state.unlocks.includes(`route:${routeId}`);
   const chartsFromHere = CHARTS.filter((c) => ROUTE_BY_ID[c.routeId]?.fromIslandId === portId);
+  const unlockedRoutes = routesFromHere.filter((r) => isUnlocked(r.id));
+  const voyageStatusMeta =
+    v.status === "completed"
+      ? { icon: CheckCircle2, tone: "text-emerald-300", label: "Ready to collect" }
+      : v.status === "running"
+        ? { icon: Timer, tone: "text-[color:var(--sog-accent)]", label: `${v.remainingMs}ms remaining` }
+        : { icon: CircleDot, tone: "text-zinc-300", label: "—" };
 
   const elapsedMs = v.status === "running" ? Math.max(0, v.durationMs - v.remainingMs) : 0;
+  const VoyageStatusIcon = voyageStatusMeta.icon;
   return (
-    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
+    <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100 sog-animate-in">
       <CardHeader>
-        <CardTitle>Voyage</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Sailboat aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+          Voyage
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="text-sm text-zinc-300">
@@ -1864,6 +2481,37 @@ function VoyagePanel({
           <span className="rounded-md border border-zinc-800 bg-black px-2 py-1">
             Warehouse cannonballs <span className="tabular-nums text-zinc-200">{whCannonballs.toString(10)}</span>
           </span>
+        </div>
+        <div className="sog-surface-muted rounded-md px-3 py-2">
+          <div className="mb-1 flex items-center justify-between text-xs text-zinc-400">
+            <span className="flex items-center gap-1.5">
+              <Compass aria-hidden="true" className="h-3.5 w-3.5" />
+              Route map from this port
+            </span>
+            <span className="tabular-nums">
+              {unlockedRoutes.length}/{routesFromHere.length} unlocked
+            </span>
+          </div>
+          <svg aria-hidden="true" viewBox="0 0 180 42" className="h-11 w-full">
+            <rect x="2" y="20" width="20" height="4" rx="2" fill="rgba(255,255,255,0.28)" />
+            {routesFromHere.slice(0, 8).map((route, idx) => {
+              const y = 6 + idx * 4.5;
+              const unlocked = isUnlocked(route.id);
+              return (
+                <g key={route.id}>
+                  <path
+                    d={`M 22 22 C 44 ${y} 90 ${y} 156 ${22 + (idx % 2 === 0 ? -8 : 8)}`}
+                    fill="none"
+                    stroke={unlocked ? "rgba(210,162,74,0.9)" : "rgba(120,132,138,0.35)"}
+                    strokeWidth={unlocked ? 1.8 : 1.1}
+                    strokeDasharray={unlocked ? "0" : "2.5 2.5"}
+                  />
+                </g>
+              );
+            })}
+            <circle cx="22" cy="22" r="3.5" fill="rgba(76,175,115,0.8)" />
+            <circle cx="156" cy="22" r="3.5" fill="rgba(210,162,74,0.82)" />
+          </svg>
         </div>
 
         {chartsFromHere.length > 0 ? (
@@ -1906,11 +2554,12 @@ function VoyagePanel({
 
         <div className="rounded-md border border-zinc-800 bg-black p-3 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
+            <div className="flex items-center gap-1.5">
+              <VoyageStatusIcon aria-hidden="true" className={cn("h-3.5 w-3.5", voyageStatusMeta.tone)} />
               Status: <span className="font-medium text-zinc-100">{v.status}</span>
             </div>
-            <div className="text-xs text-zinc-400 tabular-nums">
-              {v.status === "running" ? `${v.remainingMs}ms remaining` : v.status === "completed" ? "Ready to collect" : "—"}
+            <div className={cn("text-xs tabular-nums", voyageStatusMeta.tone)}>
+              {voyageStatusMeta.label}
             </div>
           </div>
           {v.status === "completed" ? (
@@ -1943,6 +2592,8 @@ function VoyagePanel({
                       <span className="text-zinc-200 tabular-nums">{e.cannonballsCost}</span>
                     </div>
                     <div className={cn("font-medium", label === "success" ? "text-emerald-300" : label === "fail" ? "text-rose-300" : "text-zinc-200")}>
+                      {label === "success" ? <CheckCircle2 aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" /> : null}
+                      {label === "fail" ? <AlertTriangle aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" /> : null}
                       {label}
                     </div>
                   </div>
@@ -2476,8 +3127,10 @@ export default function GameClient() {
   const [showRigging, setShowRigging] = React.useState(false);
   const [realtimeEnabled, setRealtimeEnabled] = React.useState(false);
   const [isAutomation, setIsAutomation] = React.useState(false);
+  const [forceDebugUi, setForceDebugUi] = React.useState(false);
   const [quickAdvanceMinutes, setQuickAdvanceMinutes] = React.useState("10");
   const [quickAdvanceNote, setQuickAdvanceNote] = React.useState<string | null>(null);
+  const debugUi = isAutomation || forceDebugUi;
 
   React.useEffect(() => {
     window.render_game_to_text = () =>
@@ -2506,7 +3159,13 @@ export default function GameClient() {
 
   React.useEffect(() => {
     const auto = typeof navigator !== "undefined" && navigator.webdriver;
+    let forceDebug = false;
+    if (typeof window !== "undefined") {
+      const raw = new URLSearchParams(window.location.search).get("debug");
+      forceDebug = raw === "1" || raw === "true" || raw === "on";
+    }
     setIsAutomation(!!auto);
+    setForceDebugUi(forceDebug);
     setRealtimeEnabled(!auto);
   }, []);
 
@@ -2739,13 +3398,15 @@ export default function GameClient() {
     state.unlocks.includes("recipe:brew_dye") ||
     state.unlocks.includes("recipe:weave_cloth") ||
     state.unlocks.includes("recipe:tailor_cosmetics");
+  const debugEvents = store.getDebugLog();
 
   return (
     <div className="min-h-screen bg-black text-zinc-100">
       <div className="border-b border-zinc-900 bg-zinc-950/60">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="whitespace-nowrap text-sm font-semibold tracking-tight">
+            <div className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold tracking-tight">
+              <Waves aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
               Sea of Gold <span className="text-zinc-500">·</span>{" "}
               <span className="text-zinc-300">{island.name}</span>
             </div>
@@ -2779,11 +3440,13 @@ export default function GameClient() {
                 onClick={() => store.clearOfflineCatchupReport()}
                 title={`Applied offline catch-up: ${formatDurationCompact(offline.appliedMs)} (${offline.goldGained}g gained)${offline.wasCapped ? " (capped)" : ""}. Click to dismiss.`}
               >
+                <Timer aria-hidden="true" className="mr-1.5 inline h-3 w-3 align-[-1px]" />
                 Offline: +{formatDurationCompact(offline.appliedMs)} · +{offline.goldGained}g{offline.wasCapped ? " (cap)" : ""}
               </button>
             ) : null}
             {timersLabelBits.length > 0 ? (
               <div className="hidden whitespace-nowrap rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs text-zinc-300 md:block">
+                <Timer aria-hidden="true" className="mr-1.5 inline h-3 w-3 align-[-1px] text-[color:var(--sog-accent)]" />
                 {timersLabelBits.join(" · ")}
               </div>
             ) : null}
@@ -2799,31 +3462,42 @@ export default function GameClient() {
             Port Modules
           </div>
 
-          <NavButton active={activeNav === "port"} testId="nav-port" onClick={() => setActiveNav("port")}>
+          <NavButton active={activeNav === "port"} icon={NAV_GLYPH_BY_KEY.port} testId="nav-port" onClick={() => setActiveNav("port")}>
             Port
           </NavButton>
           {!inDockIntro ? (
             <>
               {state.unlocks.includes("economy") ? (
-                <NavButton active={activeNav === "economy"} testId="nav-economy" onClick={() => setActiveNav("economy")}>
+                <NavButton
+                  active={activeNav === "economy"}
+                  icon={NAV_GLYPH_BY_KEY.economy}
+                  testId="nav-economy"
+                  onClick={() => setActiveNav("economy")}
+                >
                   Economy
                 </NavButton>
               ) : null}
               {!inEconomyIntro ? (
                 <>
                   {state.unlocks.includes("crew") ? (
-                    <NavButton active={activeNav === "crew"} testId="nav-crew" onClick={() => setActiveNav("crew")}>
+                    <NavButton active={activeNav === "crew"} icon={NAV_GLYPH_BY_KEY.crew} testId="nav-crew" onClick={() => setActiveNav("crew")}>
                       Crew
                     </NavButton>
                   ) : null}
                   {state.unlocks.includes("voyage") ? (
-                    <NavButton active={activeNav === "voyage"} testId="nav-voyage" onClick={() => setActiveNav("voyage")}>
+                    <NavButton
+                      active={activeNav === "voyage"}
+                      icon={NAV_GLYPH_BY_KEY.voyage}
+                      testId="nav-voyage"
+                      onClick={() => setActiveNav("voyage")}
+                    >
                       Voyage
                     </NavButton>
                   ) : null}
                   {state.unlocks.includes("politics") ? (
                     <NavButton
                       active={activeNav === "politics"}
+                      icon={NAV_GLYPH_BY_KEY.politics}
                       testId="nav-politics"
                       onClick={() => setActiveNav("politics")}
                     >
@@ -2843,6 +3517,7 @@ export default function GameClient() {
                             setShowRigging(false);
                           }}
                         >
+                          <Crosshair aria-hidden="true" className="h-4 w-4" />
                           Cannon Volley
                         </Button>
                       ) : null}
@@ -2856,6 +3531,7 @@ export default function GameClient() {
                             setShowCannon(false);
                           }}
                         >
+                          <Wind aria-hidden="true" className="h-4 w-4" />
                           Rigging Run
                         </Button>
                       ) : null}
@@ -2875,7 +3551,7 @@ export default function GameClient() {
           )}
         </aside>
 
-        <main className="grid gap-4">
+        <main className="sog-stagger grid gap-4">
           {showCannon ? (
             <CannonPanel
               state={state}
@@ -2952,7 +3628,25 @@ export default function GameClient() {
                   <EconomyIntroPanel onOpenEconomy={() => setActiveNav("economy")} />
                 ) : (
                   <>
-                    {isAutomation ? (
+                    <CommandDeckPanel
+                      state={state}
+                      activeNav={activeNav}
+                      onOpenNav={setActiveNav}
+                      onWork={dockWorkStart}
+                      onBuyAutomation={dockAutomateBuy}
+                      onCollectContracts={collectFirstFilled}
+                      onPrepareVoyage={voyagePrepare}
+                      onStartVoyage={voyageStart}
+                      onCollectVoyage={voyageCollect}
+                      onOpenCannon={() => {
+                        setShowCannon(true);
+                        setShowRigging(false);
+                      }}
+                    />
+                    {debugUi ? <CaptainsLogPanel events={debugEvents} /> : null}
+                    {debugUi ? <MidgameScalingPanel state={state} /> : null}
+
+                    {debugUi ? (
                       <Card className="border-zinc-900 bg-zinc-950/30 text-zinc-100">
                         <CardHeader>
                           <CardTitle>Captain’s Ledger</CardTitle>
@@ -3035,6 +3729,7 @@ export default function GameClient() {
           {activeNav === "economy" ? (
             <EconomyPanel
               state={state}
+              debugUi={debugUi}
               onPlace={placeContract}
               onCollectAll={collectFirstFilled}
               onCancel={cancelContract}
@@ -3063,7 +3758,7 @@ export default function GameClient() {
           ) : null}
 
           <DebugDispatchPanel
-            enabled={isAutomation && !inDockIntro}
+            enabled={debugUi && !inDockIntro}
             onDispatch={(action) => store.dispatch(action)}
             onOffline={(ms) => store.simulateOfflineCatchup(ms)}
             onClearOffline={() => store.clearOfflineCatchupReport()}

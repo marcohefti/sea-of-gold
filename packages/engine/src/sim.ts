@@ -291,6 +291,16 @@ export function getNextGoalsForUi(state: GameState): string[] {
 
   const goals: string[] = [];
   const unlocks = new Set(state.unlocks);
+  const portId = state.location.islandId;
+  const routesFromPort = Object.values(ROUTE_BY_ID).filter((r) => r.fromIslandId === portId && unlocks.has(`route:${r.id}`));
+  const startableRoutes = routesFromPort.filter((route) => {
+    const req = getVoyageStartRequirements(state, state.ship.classId, route.id);
+    return req ? state.storage.shipHold.inv.rum >= req.totalRum : false;
+  });
+  const routeRequirements = routesFromPort
+    .map((route) => getVoyageStartRequirements(state, state.ship.classId, route.id))
+    .filter((req): req is NonNullable<ReturnType<typeof getVoyageStartRequirements>> => !!req);
+  const minRouteRumNeeded = routeRequirements.length > 0 ? routeRequirements.reduce((min, req) => (req.totalRum < min ? req.totalRum : min), routeRequirements[0].totalRum) : 0n;
 
   if (!unlocks.has("crew")) {
     goals.push("Unlock Crew: reach 25 gold.");
@@ -301,25 +311,29 @@ export function getNextGoalsForUi(state: GameState): string[] {
   if (!unlocks.has("voyage")) {
     goals.push("Unlock Voyages: produce any Rum (contracts → distillery).");
   } else {
-    const starterUnlocked = unlocks.has("route:starter_run");
-    const moreRoutesUnlocked = unlocks.has("route:home_to_haven");
-    if (starterUnlocked && !moreRoutesUnlocked) {
-      const req = getVoyageStartRequirements(state, state.ship.classId, "starter_run");
-      const needRum = req?.totalRum ?? 6n;
-      const holdRum = state.storage.shipHold.inv.rum;
-      const wh = getWarehouse(state, state.location.islandId);
-      const whRum = wh ? wh.inv.rum : 0n;
+    const holdRum = state.storage.shipHold.inv.rum;
+    const wh = getWarehouse(state, portId);
+    const whRum = wh ? wh.inv.rum : 0n;
+    const chartsFromPort = Object.values(CHART_BY_ID).filter((chart) => ROUTE_BY_ID[chart.routeId]?.fromIslandId === portId);
 
-      if (state.voyage.status === "completed") {
-        goals.push("Collect your completed voyage to unlock more routes.");
-      } else if (state.voyage.status === "running") {
-        goals.push("Run a minigame during the voyage to boost rewards.");
-      } else if (holdRum < needRum) {
-        if (whRum > 0n) goals.push(`Load Rum into your hold (need ${needRum.toString(10)} total).`);
-        else goals.push("Distill Rum, then load it into your hold.");
+    if (state.voyage.status === "completed") {
+      goals.push("Collect your completed voyage to bank rewards and unlock progression.");
+    } else if (state.voyage.status === "running") {
+      goals.push("Run a minigame during the voyage to bank stronger active bonuses.");
+    } else if (routesFromPort.length === 0 && chartsFromPort.length > 0) {
+      goals.push("Buy a chart from this port to open a new route branch.");
+    } else if (routesFromPort.length === 0) {
+      goals.push("Use voyages/charts to open another route branch.");
+    } else if (startableRoutes.length <= 0) {
+      if (whRum > 0n && minRouteRumNeeded > holdRum) {
+        goals.push(`Load Rum into your hold (need ${minRouteRumNeeded.toString(10)} total).`);
+      } else if (whRum <= 0n) {
+        goals.push("Distill Rum, then load it into your hold to restart voyages.");
       } else {
-        goals.push("Start and complete the Starter Run voyage to unlock more routes.");
+        goals.push("Top up your hold and relaunch voyages.");
       }
+    } else if (state.stats.voyagesStarted < 3) {
+      goals.push("Run voyages to build influence and unlock midgame systems.");
     }
   }
 

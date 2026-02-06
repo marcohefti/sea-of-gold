@@ -1,97 +1,73 @@
 # Sea of Gold — Validation Playbook
 
-This repo’s definition of “done” is **automated**: `acceptance.md` must pass via the Playwright harness, with deterministic stepping and stable selectors.
+Operational guide for validating code changes.
 
-Use this document to add new systems/modules **without creating false greens** (tests pass while the game is wrong).
+Primary references:
+- `acceptance.md`
+- `AUTONOMOUS_EVAL_SYSTEM.md`
 
-## Quick commands (local)
+## 1) Local Commands
 
-Dev server (must use `5180–5189`):
-- `pnpm dev` (auto-picks `5180` first, then increments)
+Start dev server (`5180` to `5189` auto policy):
+```bash
+pnpm dev
+```
 
-Harness (deterministic; writes screenshots/state/console):
+Harness setup:
 ```bash
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 export IDLE_GAME_CLIENT="$CODEX_HOME/skills/develop-idle-game/scripts/idle_game_playwright_client.js"
+```
+
+Run one scenario:
+```bash
 node "$IDLE_GAME_CLIENT" --url http://localhost:5180 --actions-file ./e2e/action_payloads.json --scenario smoke
 ```
 
 Repo checks:
-- `pnpm check:determinism` (static scan: no `Date.now()`/`Math.random()` in engine)
-- `pnpm check:saves` (regenerates fixtures + asserts roundtrip + invariants)
+- `pnpm check:determinism`
+- `pnpm check:saves`
 - `pnpm lint`
 - `pnpm build`
+- `pnpm check:playability-rubric -- --dir .codex-artifacts/idle-game/<run-dir>`
 
-## When a harness scenario fails (triage order)
+## 2) Required Validation Levels
 
-1) Open `console.json` first (treat any error as P0).
-2) Inspect `screens/step_*.png` to confirm what was visible/clicked.
-3) Inspect `state.failed.json` (or the latest `state.step_*.json`).
-4) Check:
-   - `quality.validation.ok` and `quality.validation.errors[]` (engine invariants)
-   - `quality.debug.tail[]` (last deterministic actions/transitions)
-   - `quality.ui.*` and `quality.progression.*` (product-quality guardrails)
-5) Re-run headed + slower if needed:
-```bash
-node "$IDLE_GAME_CLIENT" --url http://localhost:5180 --actions-file ./e2e/action_payloads.json --scenario <name> --headed true --slow-mo 100 --pause-ms 250
-```
+After each meaningful change:
+- `smoke`
+- affected subsystem scenarios
+- all quality-gate scenarios
 
-## Checklist: adding a new module/system
+Before done:
+- full scenario sweep (`e2e/action_payloads.json`)
+- repo checks listed above
+- playability scenarios and rubric score:
+  - `fun_phase0_first_5min`
+  - `playability_tour_short`
+  - `playability_audit_10min`
+  - `playability_choice_pressure_midgame`
+  - `playability_active_idle_leverage`
 
-### 1) Engine (source of truth)
-- Pure TS: no DOM/timers; deterministic stepping via `advance(state, dtMs)`.
-- Stable IDs: do **not** rename content IDs; migrate on import if needed.
-- Unlock rule:
-  - Add an explicit unlock requirement (and keep it monotonic).
-  - Locked state must be representable in `render_game_to_text()` (no “UI magic”).
+## 3) Triage Order On Failure
 
-### 2) UI (render-only + stable selectors)
-- UI may **dispatch actions** and **render derived state** only.
-- Do not compute resource deltas or offline gains in UI.
-- Add `data-testid` for any new primary action (never rename once added).
-- Locked modules must not render “full pages of controls”:
-  - show a short locked summary + requirement hint
-  - avoid inflating `quality.ui.totalActionCount` early-game
+1. `console.json` (errors/pageerrors first)
+2. failing `state.*.json`
+3. `quality.validation` + `quality.debug.tail`
+4. screenshot at fail step
+5. update/fix the first failing assertion cause
 
-### 3) Instrumentation (assertable state)
-Update `render_game_to_text()` to include:
-- A concise system summary for new features (raw values only).
-- Any fields needed for stable assertions (avoid formatted strings).
-- Update product-quality guards as needed:
-  - `quality.ui.*` counts (from state/config, not DOM)
-  - `quality.progression.*` next-goal + passive/manual signals
+## 4) Adding New Systems Safely
 
-If you add invariants, include them in `window.__idle.validate()` (engine-derived).
+When adding new gameplay:
+1. Add deterministic engine behavior first.
+2. Add stable `data-testid` selectors for primary actions.
+3. Expose needed raw state fields in `render_game_to_text()`.
+4. Add at least one scenario with progress assertions.
+5. Re-run quality gates to ensure no onboarding regressions.
 
-### 4) Deterministic fixtures
-- Update `scripts/stress_saves.mjs` to generate a fixture at the new “interesting” state.
-- Run `pnpm check:saves` to regenerate `e2e/fixtures/*.json`.
-- Add a fixture import scenario asserting a minimal set of critical fields:
-  - mode, location, key unlocks, key resources, and `quality.validation.ok === true`
+## 5) Anti False-Green Rules
 
-### 5) E2E scenarios (prevent false greens)
-For a new feature, add **at least one** scenario that:
-- exercises the loop end-to-end deterministically (`advanceTime` + clicks)
-- includes an `expect` proving progress occurred (not just navigation)
-- asserts `quality.validation.ok === true` at a meaningful checkpoint
-
-Prefer robust assertions:
-- use `gt/gte/includes` over fragile exact numbers
-- assert *relative progress* (e.g. “filledQty increased”) rather than exact tick counts
-
-### 6) Coverage map
-- Update `VALIDATION_COVERAGE.md`:
-  - new criteria/system row
-  - which scenario/script covers it
-  - which state fields are required for assertions
-  - remaining gaps (explicit TODOs)
-
-## Common “false green” patterns to guard against
-
-- UI shows a number but state output is stale (or vice-versa):
-  - add a small scenario that asserts both, and keep values raw in state.
-- Determinism drift from hidden time sources:
-  - keep all progression under `window.advanceTime(ms)` in tests.
-- “Works once” but fails on rerun:
-  - always keep harness determinism rerun enabled; clear ephemeral debug state on reset.
-
+- Never rely on formatted UI values for assertions.
+- Never rely on wall-clock progression in automation tests.
+- Keep determinism rerun enabled except during temporary diagnosis.
+- Treat warning-level invariant drift as a pre-regression signal.

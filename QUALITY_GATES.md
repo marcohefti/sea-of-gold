@@ -1,77 +1,73 @@
 # Sea of Gold — Quality Gates
 
-This repo treats “product quality” regressions as **deterministic test failures**.
+This file defines product-quality regression gates.
 
-All gates are enforced via:
-- `window.render_game_to_text()` (machine-readable metrics; raw values)
-- Playwright harness scenarios in `e2e/action_payloads.json`
-- Optional invariant checks from `window.__idle.validate()`
+Normative order:
+1. `acceptance.md`
+2. `QUALITY_GATES.md`
 
-If you introduce a new system or module, you must:
-1) define its unlock requirement in the engine,
-2) add a locked-state UI (no action-heavy page while locked),
-3) update `quality.ui` / `quality.pacing` metrics, and
-4) add at least one scenario assertion.
+If a threshold here conflicts with acceptance scenario expectations, `acceptance.md` wins.
 
-## Gate 1 — Start overwhelm guard
+## Blocking Gates
 
-**Issue class:** Progressive disclosure failure at game start.
+### Gate 1: Start overwhelm guard
+- Scenario: `ui_overwhelm_guard`
+- Purpose: prevent feature overload at game start
+- Thresholds at `tut:dock_intro`:
+  - `quality.ui.visibleModuleCount <= 1`
+  - `quality.ui.primaryActionCount <= 2`
+  - `quality.ui.totalActionCount <= 6`
 
-**Signals (state):** `quality.ui.{tutorialStepId,visibleModuleCount,primaryActionCount,totalActionCount}`
+### Gate 2: Manual -> automation progression
+- Scenario: `progression_manual_to_auto`
+- Purpose: preserve onboarding rhythm and agency
+- Required behavior:
+  - passive gold is zero before automation
+  - manual dock action gives deterministic progress
+  - passive gold turns on after automation purchase
 
-**Scenario:** `ui_overwhelm_guard`
+### Gate 3: No early dead time
+- Scenario: `quality_no_dead_time_early`
+- Purpose: prevent forced waiting without actions
+- Thresholds at `tut:dock_intro`:
+  - `quality.pacing.meaningfulActionCount >= 1`
+  - `quality.pacing.timeToNextMeaningfulActionMs == 0`
+  - `quality.pacing.manualActionCooldownMs <= 250`
 
-**Thresholds (at `tut:dock_intro`):**
-- `visibleModuleCount <= 1`
-- `primaryActionCount <= 2`
-- `totalActionCount <= 6`
+### Gate 4: Unlock avalanche guard
+- Scenario: `quality_unlock_avalanche_guard`
+- Purpose: prevent unlock spikes immediately after first automation purchase
+- Thresholds:
+  - `quality.ui.lastUnlockDeltaModules <= 2`
+  - `quality.ui.lastUnlockDeltaInteractives <= 8`
+  - `quality.ui.visibleModuleCount <= 2`
+  - `quality.ui.visibleInteractiveCount <= 30`
 
-## Gate 2 — Manual → automation progression
+## Advisory Gate (Warning)
 
-**Issue class:** Passive gold starts immediately, removing the “manual → automate” beat.
+### Gate 5: Unlock-ID burst
+- Metric: `quality.ui.lastUnlockDeltaUnlockCount`
+- Current warning threshold: `<= 6`
+- Intent: catch hidden unlock bursts that UI-count-only metrics can miss.
 
-**Signals (state):** `quality.progression.*`, `resources.gold`
+This gate is currently advisory (warning), not blocking.
 
-**Scenario:** `progression_manual_to_auto`
+### Gate 6: Midgame choice pressure
+- Scenario: `playability_choice_pressure_midgame`
+- Purpose: ensure the player has multiple meaningful choices after onboarding.
+- Target thresholds:
+  - `quality.pacing.meaningfulActionCount >= 5`
+  - `quality.pacing.decisionActionCount >= 2`
+  - `quality.progression.nextGoalCount >= 2`
 
-**Rules:**
-- Early (`tut:dock_intro`): `goldPassivePerSec == 0` and gold does not increase under `advanceTime` alone.
-- Manual action increases gold deterministically.
-- After buying Dock Automation: `goldPassivePerSec > 0` and gold increases under `advanceTime` without further clicks.
+### Gate 7: Active + idle leverage
+- Scenario: `playability_active_idle_leverage`
+- Purpose: verify active inputs still matter while idle progression remains active.
+- Target thresholds:
+  - `quality.pacing.meaningfulActionIds` includes `minigame-cannon-start`
+  - `quality.progression.activeBuffCount >= 1` after a cannon run
+  - `quality.progression.goldPassivePerSec > 0`
 
-## Gate 3 — No dead time / agency (early)
+## Invariant Layer
 
-**Issue class:** Forced waiting where the player has no meaningful actions available.
-
-**Signals (state):** `quality.pacing.{meaningfulActionCount,timeToNextMeaningfulActionMs,manualActionCooldownMs,manualActionImmediateReward}`
-
-**Scenario:** `quality_no_dead_time_early`
-
-**Thresholds (at `tut:dock_intro`):**
-- `meaningfulActionCount >= 1`
-- `timeToNextMeaningfulActionMs == 0`
-- `manualActionCooldownMs <= 250`
-
-## Gate 4 — Unlock avalanche / overwhelm spike
-
-**Issue class:** One purchase/unlock causes a sudden spike in visible modules/actions.
-
-**Signals (state):** `quality.ui.{lastUnlockDeltaModules,lastUnlockDeltaInteractives,visibleModuleCount,visibleInteractiveCount}`
-
-**Scenario:** `quality_unlock_avalanche_guard`
-
-**Thresholds (immediately after buying Dock Automation):**
-- `lastUnlockDeltaModules <= 2`
-- `lastUnlockDeltaInteractives <= 8`
-- `visibleModuleCount <= 2`
-- `visibleInteractiveCount <= 30`
-
-## Invariant self-check (recommended)
-
-Expose `window.__idle.validate(): { ok, errors, warnings }` and include it in `render_game_to_text().quality.validation`.
-
-Minimum expectations:
-- `ok === true` during normal play and after fixture imports (`pnpm check:saves` asserts this).
-- Early tutorial errors if `meaningfulActionCount === 0`.
-- Warnings if unlock delta thresholds are exceeded (helps triage before the gate trips).
-
+Use `window.__idle.validate()` and `quality.validation` to fail fast on structural state errors during play and fixture imports.

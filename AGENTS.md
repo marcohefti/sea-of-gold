@@ -1,6 +1,14 @@
 # Sea of Gold — Agent Instructions
 
-Read `acceptance.md` first. If `concept.md` and `acceptance.md` conflict, follow `acceptance.md`.
+Read docs in this order:
+1) `acceptance.md`
+2) `GAME_SYSTEM.md`
+3) `FUN_UX_UI_RUBRIC.md`
+4) `DESIGN_SYSTEM.md`
+5) `AUTONOMOUS_EVAL_SYSTEM.md`
+6) `concept.md` (vision context only)
+
+If docs conflict, follow that order.
 
 ## Development Loop (mandatory)
 
@@ -49,7 +57,7 @@ Default stance: **decide, implement, test, and document**. Only ask the user whe
 
 1) `acceptance.md` must pass (tests > ideas).
 2) Determinism + testability (engine purity, seeded RNG, stable selectors, raw state for assertions).
-3) “Stickiness” pillars from `concept.md`:
+3) “Stickiness” pillars from `GAME_SYSTEM.md`:
    - Voyages are the hub
    - Logistics/storage is gameplay
    - Clear unlock ladder
@@ -108,3 +116,4 @@ Ask only if needed for:
 Whenever you make an autonomous choice:
 - Record it in `progress.md` under a “Decisions” note with 1–2 lines of rationale.
 - If it affects tests or selectors, update `acceptance.md` first, then implement, then rerun the harness.
+- If it changes gameplay behavior, update `GAME_SYSTEM.md` in the same iteration.

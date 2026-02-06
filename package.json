@@ -7,6 +7,10 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "check:determinism": "node scripts/check_determinism.mjs",
-    "check:saves": "node scripts/stress_saves.mjs --url http://localhost:5180 --seed 123"
+    "check:saves": "node scripts/stress_saves.mjs --url http://localhost:5180 --seed 123",
+    "check:autonomy-contract": "node scripts/check_autonomy_contract.mjs",
+    "check:harness-artifacts": "node scripts/check_harness_artifacts.mjs",
+    "check:playability-rubric": "node scripts/check_playability_rubric.mjs",
+    "check:autonomous": "node scripts/run_autonomous_validation.mjs"
   }
 }

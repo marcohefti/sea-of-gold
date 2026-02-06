@@ -1399,3 +1399,376 @@ Repo checks (final):
 - `pnpm check:saves`: PASS
 - `pnpm lint`: PASS
 - `pnpm build`: PASS
+
+---
+
+- 2026-02-06: Repository documentation system cleanup for autonomous agent operation.
+  - Added canonical docs:
+    - `README.md` (entry/index)
+    - `GAME_SYSTEM.md` (current implemented gameplay/system contract)
+    - `AUTONOMOUS_EVAL_SYSTEM.md` (autonomous run/evaluate/decide workflow)
+  - Rebased/aligned legacy docs to prevent stale acceptance drift:
+    - `acceptance.md` rewritten from Milestone-1 framing to current release acceptance suites.
+    - `concept.md` reduced to non-binding vision context and now explicitly defers to acceptance/system docs.
+    - `QUALITY_GATES.md`, `VALIDATION_PLAYBOOK.md`, `VALIDATION_COVERAGE.md`, and `product-quality.md` aligned to the same canonical hierarchy.
+    - `AGENTS.md` updated to read-order include `GAME_SYSTEM.md` + `AUTONOMOUS_EVAL_SYSTEM.md` and require gameplay-doc updates when behavior changes.
+
+Decisions:
+- Promoted `acceptance.md` to release-level scenario source-of-truth (all current scenarios), not Milestone 1 only. Rationale: avoids autonomous agents making decisions from outdated completion criteria.
+- Introduced explicit doc precedence (`acceptance.md` -> `GAME_SYSTEM.md` -> `AUTONOMOUS_EVAL_SYSTEM.md` -> `concept.md`). Rationale: removes ambiguity when docs disagree.
+- Updated stale legacy fixture expectation in `e2e/action_payloads.json`: `save_import_legacy_fixture` now expects `route:cay_to_haven` (current staged unlock policy), not `route:home_to_haven`.
+
+Validation (port 5180):
+- Full scenario sweep (42 scenarios): initially FAIL at `save_import_legacy_fixture` (stale expectation).
+- Post-fix targeted rerun:
+  - `save_import_legacy_fixture`: PASS (artifacts: `.codex-artifacts/idle-game/docs_cleanup_fix_20260206_034242_save_legacy`)
+- Required gate set rerun: PASS
+  - `smoke`, `ui_overwhelm_guard`, `progression_manual_to_auto`, `quality_no_dead_time_early`, `quality_unlock_avalanche_guard`, `save_import_legacy_fixture`
+  - artifacts: `.codex-artifacts/idle-game/docs_cleanup_gate_20260206_034254`
+- Full scenario sweep rerun (42/42): PASS
+  - artifacts: `.codex-artifacts/idle-game/docs_cleanup_full_rerun_20260206_034330`
+
+Repo checks (post-fix):
+- `pnpm check:determinism`: PASS
+- `pnpm check:saves`: PASS (fixtures regenerated)
+- `pnpm lint`: PASS
+- `pnpm build`: PASS
+
+---
+
+- 2026-02-06: Autonomy hardening cycle (system evaluation + implementation).
+
+Evaluation — top 5 autonomy improvements:
+1) Add a one-command autonomous validation runner that orchestrates server lifecycle, harness sweep, artifact log gate, and repo checks.
+2) Add a strict acceptance↔scenario contract check to prevent doc/test drift.
+3) Add an artifact console/pageerror checker so autonomous runs fail on hidden runtime log regressions.
+4) Add a machine-readable acceptance manifest to remove markdown parsing ambiguity (not implemented in this cycle).
+5) Add a hard deterministic pacing-budget script (time-to-automation / meaningful-choice budgets) as a blocking check (not implemented in this cycle).
+
+Implemented (top 3):
+- New script: `scripts/run_autonomous_validation.mjs`
+  - Runs `check_autonomy_contract` first.
+  - Reuses an already-running dev server on `5180–5189` when present; otherwise starts one.
+  - Runs selected/all Playwright scenarios.
+  - Runs artifact log gate (`check_harness_artifacts`).
+  - Optionally runs repo checks (`check:determinism`, `check:saves`, `lint`, `build`).
+  - Writes `summary.json` + `summary.md` to run artifact directory.
+- New script: `scripts/check_autonomy_contract.mjs`
+  - Verifies acceptance scenario coverage vs `e2e/action_payloads.json` (42/42).
+  - Verifies required quality scenarios are present.
+  - Verifies each scenario has at least one `expect`, at least one interaction/advance step, and at least one non-meta meaningful assertion.
+- New script: `scripts/check_harness_artifacts.mjs`
+  - Scans harness artifact trees for `console.json`.
+  - Fails on `error`, `warn`/`warning`, or `pageerror` message types.
+  - Supports explicit `--dir` or defaults to latest `.codex-artifacts/idle-game/*` run.
+
+Package scripts added:
+- `check:autonomy-contract`
+- `check:harness-artifacts`
+- `check:autonomous`
+
+Docs updated for autonomous usage:
+- `README.md`
+- `AUTONOMOUS_EVAL_SYSTEM.md`
+
+Validation evidence:
+- Harness after chunk 1: smoke PASS
+  - `.codex-artifacts/idle-game/autonomy_tools_chunk1_smoke_20260206_035938`
+- Harness after chunk 2: smoke PASS
+  - `.codex-artifacts/idle-game/autonomy_tools_chunk2_smoke_20260206_040007`
+- Autonomous runner (URL mode, smoke only, skip repo checks): PASS
+  - `.codex-artifacts/idle-game/autonomy_tools_runner_smoke_20260206_040021`
+- `pnpm check:autonomy-contract`: PASS
+- `pnpm check:harness-artifacts -- --dir .codex-artifacts/idle-game/autonomy_tools_runner_smoke_20260206_040021`: PASS
+- Autonomous runner (auto-discover existing server, smoke only, skip repo checks): PASS
+  - `.codex-artifacts/idle-game/autonomy_tools_runner_autostart_fix_20260206_040148`
+- Final post-fix harness check: smoke PASS
+  - `.codex-artifacts/idle-game/autonomy_tools_chunk3_smoke_20260206_040218`
+- 2026-02-06: Autonomous runner robustness fix.
+  - `run_autonomous_validation` now auto-detects and reuses an existing dev server on ports `5180–5189` before attempting to spawn `next dev`.
+  - This avoids `.next/dev/lock` failures when a dev server is already running.
+
+Harness / command validation:
+- `node scripts/run_autonomous_validation.mjs --scenarios smoke --skip-repo-checks true --out-dir .codex-artifacts/idle-game/autonomy_tools_runner_autostart_fix_20260206_040148`: PASS
+- `pnpm check:autonomous -- --url http://localhost:5180 --scenarios smoke --skip-repo-checks true --out-dir .codex-artifacts/idle-game/autonomy_tools_pkg_smoke_20260206_040308`: PASS
+- 2026-02-06: Full autonomous cycle verification (new tooling).
+  - Command: `pnpm check:autonomous -- --url http://localhost:5180 --out-dir .codex-artifacts/idle-game/autonomy_tools_full_20260206_040429`
+  - Result: PASS
+    - Harness scenarios: `42/42` PASS
+    - Artifact log gate: PASS (`console files scanned: 42`, `errors/warnings/pageerrors: 0`)
+    - Repo checks: PASS (`check:determinism`, `check:saves`, `lint`, `build`)
+  - Artifacts: `.codex-artifacts/idle-game/autonomy_tools_full_20260206_040429`
+- 2026-02-06: Playtest + autonomy-quality upgrade cycle (human-play mapping + benchmark-informed autonomy hardening).
+
+Playtest evidence (fresh):
+- Focused playability suite PASS (5 scenarios):
+  - `fun_phase0_first_5min`, `playability_tour_short`, `playability_audit_10min`, `fun_phase1_first_voyage_loop`, `fun_phase3_minigame_loop_3runs`
+  - Artifacts: `.codex-artifacts/idle-game/playtest_audit_baseline_20260206`
+- Key baseline finding before telemetry upgrade: `quality.pacing.meaningfulActionCount` stayed too flat for midgame evaluation (`1` in multiple tours), which limited autonomous fun/UX diagnosis quality.
+
+Benchmark research used for autonomous rubric design:
+- Universal Paperclips (phase-shift layering)
+- Melvor Idle (long-horizon + offline trust)
+- Kittens Game (resource pressure + design principles)
+- A Dark Room (minimal reveal / staged complexity)
+- Kongregate idle math essays (sustainable scaling and decision value)
+
+Decisions (top priorities selected and implemented):
+1) Expand deterministic quality telemetry for autonomy-grade playability evaluation.
+2) Add a canonical fun/UX/UI rubric doc tied to measurable state fields.
+3) Add an automated rubric scorer for harness artifacts.
+4) Add dedicated playability scenarios for midgame choice pressure and active-vs-idle leverage.
+5) Integrate rubric checks into the autonomous validation runner and docs.
+
+Implemented:
+- Engine/UI text-state telemetry upgrade (`apps/web/src/lib/idleStore.ts`):
+  - richer `quality.progression` fields (`nextGoalCount`, `nextGoals`, unlock-state flags, route/contract/storage/flow metrics, buff count)
+  - richer `quality.pacing` fields (`meaningfulActionIds`, `decisionActionCount`, timer blockers)
+  - upgraded `deriveNextGoalId()` to avoid placeholder/stuck goal behavior
+- New canonical rubric doc:
+  - `FUN_UX_UI_RUBRIC.md`
+- New rubric checker script:
+  - `scripts/check_playability_rubric.mjs`
+- New playability scenarios:
+  - `playability_choice_pressure_midgame`
+  - `playability_active_idle_leverage`
+  - added to `acceptance.md` suite list
+- Autonomous runner integration:
+  - `scripts/run_autonomous_validation.mjs` now runs `check_playability_rubric` automatically when required playability scenarios are present
+  - skip behavior for focused scenario runs (no false failures on smoke-only runs)
+- Script wiring / docs updates:
+  - `package.json` (`check:playability-rubric`)
+  - `README.md`, `AGENTS.md`, `AUTONOMOUS_EVAL_SYSTEM.md`, `VALIDATION_PLAYBOOK.md`, `VALIDATION_COVERAGE.md`, `QUALITY_GATES.md`
+
+Regression found/fixed during this cycle:
+- Runtime error in telemetry path: `ReferenceError: getBuffRemainingMs is not defined`.
+- Fix: local helper `getBuffRemainingMsForQuality` in `idleStore.ts`.
+
+Validation runs:
+- Chunk 1 quality-gate rerun PASS:
+  - `.codex-artifacts/idle-game/autonomy_upgrade_chunk1_gates_20260206`
+- Probe rerun for fixed runtime regression PASS:
+  - `.codex-artifacts/idle-game/autonomy_upgrade_chunk1_probe_fix_20260206`
+- Fresh playability trio rerun PASS:
+  - `.codex-artifacts/idle-game/autonomy_upgrade_chunk2_playability_20260206`
+- Rubric scoring PASS on upgraded artifacts:
+  - average score `93`
+- Expanded gate set + new scenarios PASS:
+  - `.codex-artifacts/idle-game/autonomy_upgrade_chunk3_gates_plus_playability_20260206`
+- Full release gate PASS (44 scenarios + artifact checks + rubric + repo checks):
+  - `.codex-artifacts/idle-game/autonomy_upgrade_full_20260206`
+  - `check:determinism` PASS
+  - `check:saves` PASS
+  - `lint` PASS
+  - `build` PASS
+
+- 2026-02-06: UI/design-system + autonomous playtest cycle (benchmark-informed).
+
+Playtest + benchmark evidence:
+- Focused playability suite PASS (9 scenarios):
+  - `fun_phase0_first_5min`, `playability_tour_short`, `playability_audit_10min`, `playability_choice_pressure_midgame`, `playability_active_idle_leverage`, `ui_overwhelm_guard`, `progression_manual_to_auto`, `quality_no_dead_time_early`, `quality_unlock_avalanche_guard`
+  - Artifacts: `.codex-artifacts/idle-game/design_system_playtest_current_20260206`
+- Benchmark references used for UI/loop evaluation:
+  - Universal Paperclips, Melvor Idle, Kittens Game, A Dark Room, Kongregate idle math.
+
+Top-5 prioritized gaps (this cycle):
+1) Primary-action clarity drift in midgame.
+2) Weak immediate feedback narrative after actions.
+3) Inconsistent visual language/token usage across UI controls.
+4) Logistics pressure readability uneven in some loops.
+5) Limited explicit DOM↔state UX parity checks.
+
+Implemented (top 3):
+- Added canonical UI design system doc: `DESIGN_SYSTEM.md`.
+- Implemented tokenized visual foundation + typography system:
+  - `apps/web/src/app/layout.tsx`
+  - `apps/web/src/app/globals.css`
+  - `apps/web/src/components/ui/{card,button,input}.tsx`
+- Implemented action/feedback UX scaffolding in game UI:
+  - `Command Deck` panel (primary objective + recommended actions)
+  - `Captain's Log` panel (deterministic recent event feedback)
+  - file: `apps/web/src/components/game/GameClient.tsx`
+- Wired canonical docs so autonomous agents read the new system:
+  - `README.md`, `AGENTS.md`, `AUTONOMOUS_EVAL_SYSTEM.md`.
+
+Decisions:
+- Adopted a hybrid UI strategy: Melvor-style modern shell + Paperclips/Kittens system-first readability + A Dark Room staged reveal.
+- Prioritized deterministic UX guidance/feedback panels over decorative changes to improve autonomous and human evaluability.
+- Kept all new changes selector-safe and acceptance-compatible; no `data-testid` renames.
+
+Validation runs (port policy respected; settled on `5180`):
+- Chunk 1 (tokens + quality gates): PASS
+  - `.codex-artifacts/idle-game/design_system_chunk1_gates_20260206`
+- Chunk 2/3 (Command Deck + Captain's Log + playability suite): PASS
+  - `.codex-artifacts/idle-game/design_system_chunk2_3_gates_playability_20260206`
+- Full release gate rerun (after transient stale server timeout issue): PASS
+  - `.codex-artifacts/idle-game/design_system_full_rerun_20260206`
+  - scenarios: `44/44` PASS
+  - `check:harness-artifacts`: PASS (`errors/warnings/pageerrors: 0`)
+  - `check:playability-rubric`: PASS (average `93`)
+  - `check:determinism`: PASS
+  - `check:saves`: PASS
+  - `lint`: PASS
+  - `build`: PASS
+
+- 2026-02-06: Icon/SVG/motion system expansion + design-system rewrite.
+
+Evaluation (design guide -> implementation gaps):
+- Reviewed existing `DESIGN_SYSTEM.md` and found missing canonical guidance for icon semantics, SVG usage patterns, and motion rules.
+- Prioritized 10 implementation gaps focused on scan speed, feedback clarity, and long-session usability while keeping deterministic testability unchanged.
+
+Top 10 gaps implemented (this cycle):
+1) Canonical icon language was missing -> added mapped icon semantics for nav/resources/actions.
+2) Resource pills were text-heavy -> added iconized pills + deterministic sparkline SVG.
+3) Warehouse pressure lacked compact urgency -> added storage ring gauge.
+4) Nav lacked wayfinding cues -> added iconized nav, active chevron/rail, lock icon cue.
+5) No branded SVG layer -> added Harbor Sigil SVG on title.
+6) Voyage lacked topology cue -> added route mini-map SVG from current port.
+7) Primary CTA emphasis inconsistent -> iconized/pulsed command-primary action.
+8) Captain’s Log lacked semantic feedback -> icon + tone-coded event rows.
+9) Minigame visual feedback was plain -> iconized controls + shimmer/pulse progress cues.
+10) Motion system undocumented/unstable -> added motion tokens, keyframes, stagger utility, reduced-motion guard.
+
+Implemented files:
+- `apps/web/src/components/game/GameClient.tsx`
+- `apps/web/src/app/globals.css`
+- `DESIGN_SYSTEM.md`
+
+Decisions:
+- Used `lucide-react` + inline deterministic SVG (no new runtime dependencies) to keep UI extensible and acceptance-safe.
+- Kept all existing `data-testid` selectors unchanged; only added visuals/motion and non-contractual helper UI.
+- Motion is intentionally subtle and entirely CSS-based with `prefers-reduced-motion` fallback.
+
+Validation runs:
+- Change gate after chunk 1: PASS
+  - `.codex-artifacts/idle-game/icons_motion_chunk1_gates_20260206`
+- Change gate after chunk 2: PASS
+  - `.codex-artifacts/idle-game/icons_motion_chunk2_gates_20260206`
+- Change gate after lint-fix chunk: PASS
+  - `.codex-artifacts/idle-game/icons_motion_chunk3_lintfix_gates_20260206`
+- Focused playability/minigame/voyage suite: PASS (8 scenarios)
+  - `.codex-artifacts/idle-game/icons_motion_chunk4_playability_20260206`
+  - rubric: PASS, average `93`
+- Full completion gate: PASS
+  - `.codex-artifacts/idle-game/icons_motion_full_20260206`
+  - scenarios: `44/44` PASS
+  - `check:harness-artifacts`: PASS (`errors/warnings/pageerrors: 0`)
+  - `check:playability-rubric`: PASS (average `93`)
+  - `check:determinism`: PASS
+  - `check:saves`: PASS
+  - `lint`: PASS
+  - `build`: PASS
+
+- 2026-02-06: Midgame playtest + autonomy hardening cycle (progression/scaling focus).
+
+Playtest + mapping evidence:
+- Baseline midgame suite (8 scenarios): PASS
+  - `.codex-artifacts/idle-game/midgame_eval_baseline_20260206`
+- Post-change midgame suite (8 scenarios): PASS
+  - `.codex-artifacts/idle-game/midgame_eval_post_20260206`
+- Human-play mapping snapshots:
+  - politics-heavy midgame: `.codex-artifacts/idle-game/midgame_eval_post_20260206/playability_audit_10min/screens/step_058_expect.png`
+  - economy/contract pressure state: `.codex-artifacts/idle-game/midgame_eval_post_20260206/playability_choice_pressure_midgame/screens/step_027_expect.png`
+  - active+idle leverage state: `.codex-artifacts/idle-game/midgame_eval_post_20260206/playability_active_idle_leverage/screens/step_030_expect.png`
+
+Top 10 prioritized gaps (this cycle):
+1) Midgame goals can become stale or generic after route unlock branching.
+2) Route progression metrics mix global and current-port scope, reducing autonomous diagnosis quality.
+3) Midgame bottlenecks (rum gap, chart affordability, sink pressure) are not consolidated in one panel.
+4) Command Deck can suggest navigation detours instead of directly unblocking stalled voyage flow.
+5) Choice-pressure telemetry undercounts real decisions (dock hustle/work, hold transfer, rigging start).
+6) Route branch expansion readiness is hard to infer quickly from existing UI cards.
+7) Human/agent evaluation loop lacks explicit route-scope metrics for “why voyages are idle”.
+8) Midgame progression health is spread across many cards (contracts, hold, voyages, politics).
+9) Goal text in voyage branch states did not always explain chart-vs-rum next step cleanly.
+10) Autonomy diagnostics need stronger parity between human “what feels blocked” and machine-readable state.
+
+Implemented top 5:
+1) Reworked engine next-goal generation for dynamic route/chart/rum states.
+   - file: `packages/engine/src/sim.ts` (`getNextGoalsForUi`)
+2) Expanded decision-pressure telemetry action set to better reflect meaningful options.
+   - file: `apps/web/src/lib/idleStore.ts` (`DECISION_ACTION_IDS`)
+3) Added route-scope progression telemetry (global vs current port, rum gap, chart affordability).
+   - file: `apps/web/src/lib/idleStore.ts` (`quality.progression.*`)
+4) Added a `Midgame Scaling Radar` panel for bottlenecks and expansion windows.
+   - file: `apps/web/src/components/game/GameClient.tsx`
+5) Upgraded Command Deck to directly execute voyage preparation when rum-gated.
+   - file: `apps/web/src/components/game/GameClient.tsx`
+
+Decisions:
+- Prioritized autonomy-visible diagnostics (route scope + rum gap + chart affordability) over adding new content systems, because acceptance already passes and the larger gap was evaluation fidelity.
+- Treated voyage stalls as the dominant midgame friction to solve first: this improves both human readability and agent decision quality without changing deterministic core rules.
+
+Validation runs after each meaningful change:
+- Change gate A (post engine/telemetry edits): PASS
+  - `.codex-artifacts/idle-game/midgame_eval_change_gate_20260206_a`
+- Change gate B (post deriveNextGoalId + route-scope metrics): PASS
+  - `.codex-artifacts/idle-game/midgame_eval_change_gate_20260206_b`
+- Change gate C (post Midgame Scaling Radar UI): PASS
+  - `.codex-artifacts/idle-game/midgame_eval_change_gate_20260206_c`
+- Change gate D (post Command Deck prepare action): PASS
+  - `.codex-artifacts/idle-game/midgame_eval_change_gate_20260206_d`
+
+Completion gate:
+- Full acceptance + repo gate: PASS
+  - `.codex-artifacts/idle-game/midgame_eval_full_20260206`
+  - scenarios: `44/44` PASS
+  - `check:harness-artifacts`: PASS (`errors/warnings/pageerrors: 0`)
+  - `check:playability-rubric`: PASS (average `93`)
+  - `check:determinism`: PASS
+  - `check:saves`: PASS
+  - `lint`: PASS
+  - `build`: PASS
+
+- 2026-02-06: Player UI cleanup via explicit debug-display mode (same core sim).
+
+Problem statement:
+- Midgame/autonomy diagnostics were visible in normal player flow (e.g., scaling radar, contract technical IDs like `#c_2`), which cluttered player UX.
+
+Decision:
+- Split display concerns, not game logic:
+  - Normal mode: player-clean UI (hide debug-heavy surfaces/IDs).
+  - Debug mode: reveal additional diagnostics for autonomous/human evaluation.
+- Debug mode activation policy:
+  - automatic when `navigator.webdriver === true` (harness/agent runs)
+  - optional for humans via URL param: `?debug=1` (also accepts `true` / `on`)
+
+Implemented:
+- `apps/web/src/components/game/GameClient.tsx`
+  - Added `debugUi` gate (`isAutomation || forceDebugUi`).
+  - Added URL-based debug toggle parsing from `window.location.search`.
+  - Gated debug-heavy panels in normal mode:
+    - `CaptainsLogPanel`
+    - `MidgameScalingPanel`
+    - `Captain’s Ledger`
+    - `DebugDispatchPanel`
+  - Kept these visible in debug mode and in automation.
+  - Economy row cleanup:
+    - show commodity display name in normal mode
+    - hide contract technical IDs/priority hints unless in debug mode
+    - keeps strategy details available when debugging.
+
+Regression and fix during cycle:
+- Initial attempt used `useSearchParams`, which caused Next build failure without Suspense boundary.
+- Replaced with client-only `window.location.search` parse to keep static build green.
+
+Validation runs:
+- Change gate attempt A: failed due misplaced variable scope compile error (`searchParams` undefined).
+  - killed stuck process and fixed scope.
+- Change gate B: stale server timeout (`page.goto`); reran clean on fixed port.
+- Change gate C (clean rerun): PASS
+  - `.codex-artifacts/idle-game/debug_ui_split_change_gate_20260206_c`
+  - scenarios: `smoke`, `contracts_basic`, `contracts_strategy_levers_basic`, quality gates, `playability_choice_pressure_midgame`
+- Smoke after `useSearchParams` removal: PASS
+  - `.codex-artifacts/idle-game/debug_ui_split_smoke_fix_20260206`
+- Explicit URL debug-mode probe (`?debug=1`): PASS
+  - `.codex-artifacts/idle-game/debug_ui_param_smoke_20260206`
+- Full completion gate rerun: PASS
+  - `.codex-artifacts/idle-game/debug_ui_split_full_rerun_20260206`
+  - scenarios: `44/44` PASS
+  - `check:harness-artifacts`: PASS (`errors/warnings/pageerrors: 0`)
+  - `check:playability-rubric`: PASS (average `93`)
+  - `check:determinism`: PASS
+  - `check:saves`: PASS
+  - `lint`: PASS
+  - `build`: PASS

@@ -1,54 +1,41 @@
-# Sea of Gold — Validation Coverage Map
+# Sea of Gold — Validation Coverage
 
-This document maps **product quality**, **determinism**, and **system correctness** criteria to automated checks.
+Coverage map from gameplay/system criteria to automated checks.
 
-Goal: reduce “false greens” where tests pass but the game is still wrong.
+Canonical acceptance list lives in `acceptance.md`.
 
-See also: `VALIDATION_PLAYBOOK.md` (how to add new systems without breaking gates).
+## Criteria Coverage
 
-## Legend
+| Criteria | Primary scenarios | Required state signals |
+|---|---|---|
+| Start-state clarity / anti-overwhelm | `ui_overwhelm_guard`, `quality_unlock_avalanche_guard` | `quality.ui.*` |
+| Manual -> automation onboarding | `progression_manual_to_auto`, `quality_no_dead_time_early` | `quality.progression.*`, `quality.pacing.*`, `resources.gold` |
+| Contract economy correctness | `contracts_basic`, `contracts_strategy_levers_basic`, `contracts_cancel_basic` | `economy.contracts[]`, `economy.contractSlots` |
+| Voyage prep and routing | `voyage_prepare_basic`, `voyage_chart_unlock_basic`, `phase0_loop` | `voyage.*`, `hold.*`, `unlocks[]` |
+| Encounter resolution | `voyage_encounters_visible_basic`, `phase1_cannonballs_encounter` | `voyage.encounters[]`, `ship.condition`, `hold.cannonballs` |
+| Cannon minigame loop | `minigame_cannon_basic`, `minigame_cannon_spam_guard` | `minigames.cannon`, `buffs[]`, `minigameLocks` |
+| Rigging minigame loop | `phase2_rigging_run_efficiency`, `fun_phase3_minigame_loop_3runs` | `minigames.rigging`, `buffs[]` |
+| Politics + tax perks | `phase2_politics_tax_discount`, `politics_tax_relief_campaign_basic` | `politics.*`, `economy.contracts[].feePaid` |
+| Influence via trade | `politics_influence_from_contracts_basic` | `politics.influenceByFlagId` |
+| Cosmetics/vanity sinks | `phase2_cosmetics_vanity_signage` | `unlocks[]`, `storage.warehouseCap`, `resources.cosmetics` |
+| Fleet + shipyard progression | `phase3_shipyard_upgrade_basic`, `phase3_fleet_automation_basic` | `shipyard.level`, `fleet.*` |
+| Conquest loop | `phase3_conquest_basic` | `conquest.*`, `world.controllerByIslandId` |
+| Flagship sink/permanent bonus | `phase3_flagship_basic` | `flagship.*`, `unlocks[]` |
+| Offline deterministic catch-up | `fun_phase4_offline_2h`, `fun_phase4_offline_8h` | `meta.offline`, `meta.nowMs`, resources |
+| Save/import + migrations | `save_import_*`, `save_import_legacy_fixture`, `pnpm check:saves` | `meta.version`, key systems, `quality.validation` |
+| Playability choice pressure | `playability_choice_pressure_midgame`, `playability_active_idle_leverage` | `quality.pacing.meaningfulAction*`, `quality.progression.nextGoal*`, `buffs[]` |
+| Fun/UX rubric pass | `fun_phase0_first_5min`, `playability_tour_short`, `playability_audit_10min`, `pnpm check:playability-rubric` | `quality.ui`, `quality.progression`, `quality.pacing` |
+| Determinism enforcement | harness rerun + `pnpm check:determinism` | deterministic subset equality |
 
-- **Engine/script**: deterministic Node scripts (no browser) or repo checks.
-- **E2E scenario**: Playwright harness scenario in `e2e/action_payloads.json`.
-- **State fields**: paths in `render_game_to_text()` required for stable assertions.
-- **Gaps**: missing coverage or known weaknesses.
+## Quality Instrumentation Required
 
-## Coverage table (minimum criteria A–H)
+- `quality.ui`
+- `quality.progression`
+- `quality.pacing`
+- `quality.validation`
+- `quality.debug`
 
-| Criteria | Engine / scripts | E2E scenarios | Required `render_game_to_text` fields | Gaps / notes |
-|---|---|---|---|---|
-| A) Progressive disclosure / anti-overwhelm | — | `ui_overwhelm_guard`, `quality_unlock_avalanche_guard` | `quality.ui.*`, `meta.mode` | Guards Dock Intro (action count caps) and post-automation unlock spikes (delta/cap metrics). |
-| B) Manual → automation progression | — | `progression_manual_to_auto`, `smoke` | `quality.progression.*`, `resources.gold` | Covered as an explicit regression detector. |
-| C) Pacing / dead-time bounds (early) | `scripts/pacing_10min.mjs` (analysis; not a hard gate yet) | `quality_no_dead_time_early`, `fun_phase0_first_5min`, `phase0_loop` | `quality.pacing.*`, `quality.progression.nextGoalId`, core resources/unlocks | `quality_no_dead_time_early` is the hard “no forced waiting” guard; budgeted time-to-automation is still analysis-only (TODO). |
-| D) Meaningful choice presence (early) | — | (indirect) `phase0_loop` | `quality.progression.nextGoalId`, unlocks/resources | No explicit “≥2 viable actions” detector derived from state (TODO). |
-| E) Active minigame: deterministic reward + downstream impact | — | `minigame_cannon_basic`, `fun_phase3_minigame_loop_3runs`, `minigame_cannon_spam_guard` | `buffs[]`, `minigameLocks.*` | Tier/impact assertions are partial; consider adding a “buff changes voyage math” proof if needed. |
-| F) Offline catch-up deterministic + capped | — | `fun_phase4_offline_2h`, `fun_phase4_offline_8h` | `meta.offline.*`, `meta.nowMs`, core resources | Covered at UI/state level; cap is in engine/store logic. |
-| G) Save/import/export versioning + migrations | `pnpm check:saves` (`scripts/stress_saves.mjs`) + harness roundtrip | `save_import_*_fixture`, `save_import_legacy_fixture` | `meta.version`, core state (resources/unlocks/location/systems), `quality.validation` | `check:saves` regenerates deterministic fixtures and asserts roundtrip + `__idle.validate().ok`. |
-| H) No hidden UI/engine mismatch | — | (none dedicated) | UI parity fields + `quality.validation`, `quality.debug` | No DOM↔state parity scenario yet (TODO). |
+## Known Gaps
 
-## Cross-cutting quality instrumentation
-
-| Signal | Where | How it’s used | Notes |
-|---|---|---|---|
-| Engine invariants | `window.__idle.validate()` + `quality.validation` | Fixture imports and save stress checks assert `ok === true` | Prevents silent negative timers/resources and similar drift. |
-| Debug log tail | `quality.debug` | Included in `state.*.json` artifacts | Deterministic action/transition breadcrumbs for faster triage. |
-
-## System correctness (core loops)
-
-| System | Engine / scripts | E2E scenarios | Required state fields | Gaps / notes |
-|---|---|---|---|---|
-| Determinism “no forbidden calls” | `pnpm check:determinism` (`scripts/check_determinism.mjs`) | Harness determinism rerun (default) | — | Static scan + scenario rerun. |
-| Determinism rerun equality | Harness determinism rerun (default `basic`) | All scenarios | Stable subset of state | Use `--determinism-check full` when diagnosing. |
-| Save roundtrip | Harness roundtrip check (default `basic`) | All scenarios | `resources/unlocks/location` subset | `pnpm check:saves` provides deeper per-fixture roundtrip comparisons. |
-| Contracts placement/fill/collect | — | `contracts_basic`, `contracts_strategy_levers_basic`, `contracts_cancel_basic` | `economy.contracts[]` | Covered for progress + levers; could add more edge cases (cap/full warehouse). |
-| Unlock ladder / gating | — | `unlock_ladder_basic`, `unlock_gates_phase0_basic` | `unlocks[]`, `quality.ui.tutorialStepId` | Works; keep IDs stable. |
-| Minigame loop + anti-spam | — | `minigame_cannon_basic`, `minigame_cannon_spam_guard` | `buffs[]`, `minigameLocks.*` | Covered. |
-| Voyage loop + encounters | `scripts/scaling_audit_60min.mjs` (analysis) | `voyage_prepare_basic`, `voyage_*`, `phase1_cannonballs_encounter` | `voyage.*`, encounters list, ship/hold resources | Covered at a basic level; deeper balancing remains analysis-only. |
-| Politics perk loop | — | `phase2_politics_tax_discount`, `politics_tax_relief_campaign_basic` | `politics.*` incl. perk/campaign | Covered. |
-| Deterministic fixtures | `pnpm check:saves` | `save_import_*_fixture` | core fields + `quality.validation` | Fixture set includes: fresh, after automation, after contracts, after minigame, after starter voyage, plus legacy. |
-
-## Known gaps / TODOs (explicit)
-
-1) Add a small DOM↔state parity scenario (gold, contract filledQty, buff remaining) to prevent UI drift.
-2) Add a hard pacing gate (budgeted “time-to-automation” and “first meaningful choice” bounds) as an engine/script check.
-3) Add a state-derived “meaningful choice present” detector for early game (avoid one-path onboarding).
+1. No dedicated DOM-vs-state parity scenario yet (state is authoritative, DOM parity is indirect).
+2. Unlock-ID burst is warning-level today; can be promoted to a hard gate if regressions recur.
