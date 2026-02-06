@@ -138,7 +138,29 @@ System integrity:
 - sinks exist for each new generator
 - next goal remains visible (`quality.progression.nextGoalId` / goals UI)
 
-## 8) Allowed Autonomous Changes
+## 8) Economy Audit Addendum (Required For Economy-Touching Changes)
+
+When a change affects economy/progression systems, also run this audit:
+
+1. Faucet/sink map
+- List new/changed faucets and verify a matching sink/cap pressure exists.
+
+2. Net-flow pressure check
+- Verify the change does not create a single dominant no-cost generator lane.
+
+3. Active vs idle leverage check
+- Confirm active play improves outcomes but idle remains viable for baseline progress.
+
+4. Capacity pressure check
+- Verify warehouse/hold caps create clear decisions, not silent loss behavior.
+
+5. Re-entry and pacing check
+- Verify short and medium horizon goals remain visible after the change.
+
+6. Inflation drift check
+- If value velocity increases materially, add sink/cap pressure before adding more generation.
+
+## 9) Allowed Autonomous Changes
 
 Agents may decide and implement without asking if:
 - acceptance remains passable
@@ -150,7 +172,7 @@ Agents must ask only for:
 - architecture shift away from deterministic engine + Playwright harness
 - monetization/real-money economy decisions
 
-## 9) Completion Output Standard
+## 10) Completion Output Standard
 
 A complete autonomous run must include:
 - code/doc changes made

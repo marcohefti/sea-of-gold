@@ -707,6 +707,7 @@ function computeQualityPacing(state: GameState) {
 
 function deriveNextGoalId(state: GameState): string {
   if (state.mode === "title") return "goal:start_new_game";
+  const longHorizonVoyageThreshold = 3;
 
   const stepId = getTutorialStepIdForUi(state);
   if (stepId === "tut:dock_intro") {
@@ -721,6 +722,11 @@ function deriveNextGoalId(state: GameState): string {
   const portId = state.location.islandId;
   const wh = state.storage.warehouses[portId];
   const whRum = wh?.inv.rum ?? 0n;
+  const whSugar = wh?.inv.sugar ?? 0n;
+  const localSugarContracts = state.economy.contracts.filter(
+    (c) => c.portId === portId && c.commodityId === "sugar" && (c.status === "open" || c.status === "filled")
+  );
+  const localCollectableSugarContracts = localSugarContracts.filter((c) => c.filledQty > c.collectedQty).length;
   const holdRum = state.storage.shipHold.inv.rum;
 
   if (!state.unlocks.includes("voyage")) {
@@ -754,24 +760,31 @@ function deriveNextGoalId(state: GameState): string {
   const hasStartableRoute = routeIds.some((routeId) => canStartRouteFromHold(state, routeId));
   if (state.voyage.status === "idle" && routeIds.length > 0 && !hasStartableRoute) {
     if (whRum > 0n && holdRum < minRumNeeded) return "goal:load_hold_rum";
+    if (whRum <= 0n && localCollectableSugarContracts > 0) return "goal:collect_sugar_contract";
+    if (whRum <= 0n && whSugar <= 0n && localSugarContracts.length === 0) return "goal:restock_sugar_contract";
     return whRum > 0n ? "goal:top_up_hold" : "goal:produce_rum";
   }
+  if (
+    state.voyage.status === "idle" &&
+    hasStartableRoute &&
+    state.unlocks.includes("minigame:cannon") &&
+    !state.buffs.some((b) => b.id === "cannon_volley")
+  ) {
+    return "goal:play_cannon_volley";
+  }
   if (state.stats.voyagesStarted <= 0 && hasStartableRoute) return "goal:start_first_voyage";
-  if (state.stats.voyagesStarted < 3 && hasStartableRoute) return "goal:run_voyages";
+  if (state.stats.voyagesStarted < longHorizonVoyageThreshold && hasStartableRoute) return "goal:run_voyages";
   if (affordableCharts.length > 0) return "goal:buy_route_chart";
 
   if (!state.unlocks.includes("politics")) return "goal:unlock_politics";
   if (state.politics.affiliationFlagId === "player") return "goal:choose_affiliation";
   if (!state.unlocks.includes("vanity_shop")) return "goal:reach_10_influence";
 
-  if (state.shipyard.level < 2) return "goal:upgrade_shipyard";
-  if (state.fleet.maxShips < 3) return "goal:expand_fleet";
-
-  if (state.unlocks.includes("minigame:cannon") && !state.buffs.some((b) => b.id === "cannon_volley")) {
-    return "goal:play_cannon_volley";
-  }
-
-  if (!state.unlocks.includes("flagship_built")) return "goal:build_flagship";
+  const shouldShowLongHorizonGoals =
+    state.stats.voyagesStarted >= longHorizonVoyageThreshold || state.unlocks.includes("vanity_shop");
+  if (shouldShowLongHorizonGoals && state.shipyard.level < 2) return "goal:upgrade_shipyard";
+  if (shouldShowLongHorizonGoals && state.fleet.maxShips < 3) return "goal:expand_fleet";
+  if (shouldShowLongHorizonGoals && !state.unlocks.includes("flagship_built")) return "goal:build_flagship";
   return "goal:expand_routes";
 }
 

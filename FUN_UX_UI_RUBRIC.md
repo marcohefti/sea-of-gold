@@ -62,6 +62,15 @@ Agents should use these `render_game_to_text()` fields:
 - `quality.ui.visibleModuleCount`
 - `quality.ui.visibleInteractiveCount`
 
+Recommended economy telemetry (optional but high-value):
+- `quality.economy.grossGoldPerMin`
+- `quality.economy.sinkGoldPerMin`
+- `quality.economy.netGoldPerMin`
+- `quality.economy.sinkCoverageBps`
+- `quality.economy.storageBlockedValuePerMin`
+- `quality.economy.affordableSpendOptionCount`
+- `quality.economy.nextEconomicUnlockEtaMs`
+
 ## 4) Scoring dimensions (0-100)
 
 Each dimension scores 0-20.
@@ -82,8 +91,8 @@ Each dimension scores 0-20.
 - 0: either idle is dead or active play has no advantage
 
 4. Logistics Friction Quality
-- 20: storage/hold pressure and sinks are present but understandable
-- 10: sinks exist but are mostly invisible in current state
+- 20: storage/hold pressure is visible and at least two sink lanes are legible
+- 10: sinks exist but are mostly invisible or singular in current state
 - 0: runaway generation with no visible friction
 
 5. UI Focus
@@ -94,7 +103,23 @@ Each dimension scores 0-20.
 Recommended pass threshold: `>= 70`.
 Hard fail threshold: `< 55`.
 
-## 5) Evaluation protocol
+## 5) Economy Health Addendum (Research-Backed)
+
+Use this addendum whenever changes touch contracts, voyages, logistics, politics, production, wages, or upgrades.
+
+Economy checks:
+1. Faucet/sink pairing
+- every new value source has a clear sink or cap pressure in the same phase.
+2. Net-flow sanity
+- growth should come from player choices, not one unchecked passive lane.
+3. Active/idle leverage
+- active loops accelerate progress but do not make idle non-viable.
+4. Capacity pressure quality
+- storage/hold constraints create routing decisions, not silent punishment.
+5. Re-entry value
+- after short absence, players can identify at least one immediate and one medium-term economic action.
+
+## 6) Evaluation protocol
 
 For each change affecting progression, economy, voyages, politics, or minigames:
 1. Run quality-gate scenarios from `acceptance.md`.
@@ -105,7 +130,14 @@ For each change affecting progression, economy, voyages, politics, or minigames:
 3. Score the run with `scripts/check_playability_rubric.mjs`.
 4. If score is below threshold, fix the top failing dimension before continuing.
 
-## 6) Sources
+Economy-focused scenario set (run when economy behavior changed):
+- `phase0_loop`
+- `contracts_strategy_levers_basic`
+- `playability_choice_pressure_midgame`
+- `playability_active_idle_leverage`
+- `quality_no_dead_time_early`
+
+## 7) Sources
 
 - Universal Paperclips (official): <https://www.decisionproblem.com/paperclips/>
 - Universal Paperclips mechanics summary: <https://universalpaperclips.fandom.com/wiki/Universal_Paperclips_Wiki>
@@ -116,3 +148,8 @@ For each change affecting progression, economy, voyages, politics, or minigames:
 - A Dark Room (official): <https://adarkroom.doublespeakgames.com/>
 - A Dark Room mechanics summary: <https://adarkroom.fandom.com/wiki/The_Gathering_Tab>
 - Idle balancing reference (Kongregate): <https://blog.kongregate.com/the-math-of-idle-games-part-i/>
+- Idle balancing reference (Kongregate Part II): <https://blog.kongregate.com/the-math-of-idle-games-part-ii/>
+- Idle balancing reference (Kongregate Part III): <https://blog.kongregate.com/the-math-of-idle-games-part-iii/>
+- Value-chain economy framing (Lost Garden): <https://lostgarden.home.blog/2021/12/12/value-chains/>
+- Virtual economy inflation dynamics (Castronova et al.): <https://econpapers.repec.org/RePEc:wsi:igtrxx:v:05:y:2006:i:03:n:s0219198906000987>
+- Idle player behavior taxonomy (CHI): <https://dl.acm.org/doi/10.1145/3311350.3347183>

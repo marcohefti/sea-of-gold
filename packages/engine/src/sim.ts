@@ -39,8 +39,8 @@ const RIGGING_BUFF_MS = 5 * 60_000;
 const MINIGAME_REFRESH_WINDOW_MS = 60_000;
 const RIGGING_CYCLE_MS = 1200;
 const RIGGING_ZONE_WIDTH_PERMILLE = 200; // 20%
-const RIGGING_RUM_EFFICIENCY_PCT = 25; // -25% baseline rum usage on voyages
-const RIGGING_SPEED_BONUS_PCT = 10; // +10% voyage speed when rigging_run is active (applies on voyage start)
+const RIGGING_RUM_EFFICIENCY_PCT = 30; // -30% baseline rum usage on voyages
+const RIGGING_SPEED_BONUS_PCT = 15; // +15% voyage speed when rigging_run is active (applies on voyage start)
 const DEFAULT_SHIP_SPEED_PCT = 100;
 const VANITY_WAREHOUSE_SIGNAGE_CAP_BONUS = 20n;
 const VANITY_SHIP_FIGUREHEAD_CONDITION_BONUS = 10;
@@ -50,12 +50,16 @@ const VOYAGE_BONUS_SOFTCAP_START_PCT = 40;
 const VOYAGE_BONUS_SOFTCAP_DIVISOR = 2; // each +2% beyond softcap counts as +1%
 const FLAGSHIP_CONTRIBUTE_GOLD = 200n;
 const FLAGSHIP_CONTRIBUTE_COSMETICS = 5n;
+const FLAGSHIP_COMPLETION_GOLD_REWARD = 120n;
+const FLAGSHIP_COMPLETION_INFLUENCE_REWARD = 5;
 const CONQUEST_STAGE_MS = 60_000;
 const CONQUEST_DURATION_MS = 3 * CONQUEST_STAGE_MS;
 const CONQUEST_WARCHEST_GOLD_PER_TIER = 200n;
 const CONQUEST_INFLUENCE_PER_TIER = 20;
+const CONQUEST_SUCCESS_GOLD_PER_TIER = 60n;
+const CONQUEST_SUCCESS_INFLUENCE_PER_TIER = 4;
 const SHIPYARD_MAX_LEVEL = 4;
-const SHIPYARD_UPGRADE_GOLD_PER_LEVEL = 300n;
+const SHIPYARD_UPGRADE_GOLD_PER_LEVEL = 250n;
 const STARTING_WAREHOUSE_CAP = 50n;
 const WAREHOUSE_UPGRADE_COST = 100n;
 const WAREHOUSE_UPGRADE_BONUS = 50n;
@@ -68,6 +72,7 @@ const ENCOUNTER_FAIL_CONDITION = 5;
 const ENCOUNTER_FAIL_GOLD_PENALTY_PCT = 10;
 const CREW_HIRE_COST_GOLD = 25n;
 const CREW_WAGE_PER_CREW_PER_MIN = 1n;
+const SHIP_UPKEEP_PER_SHIP_PER_MIN = 1n;
 const TIER_FEE_BPS_PER_TIER = 500; // +5% per tier above 1
 const DONATION_GOLD_PER_INFLUENCE = 10n; // 10g => +1 influence
 const TAX_RELIEF_REQUIRED_INFLUENCE = 5;
@@ -83,7 +88,18 @@ const DOCK_WORK_REWARD_GOLD = 5n;
 const DOCK_WORK_IMMEDIATE_GOLD = 1n;
 const DOCK_WORK_COMPLETION_GOLD = DOCK_WORK_REWARD_GOLD - DOCK_WORK_IMMEDIATE_GOLD;
 const DOCK_WORK_HUSTLE_REDUCE_MS = 500; // click during a shift to reduce remaining time (min 1ms; reward remains time-based)
+const DOCK_WORK_HUSTLE_BONUS_GOLD = 1n;
 const DOCK_AUTOMATE_COST_GOLD = 30n;
+const VOYAGE_PORT_DUTY_PER_TIER = 2n;
+const CANNON_FINISH_GOLD_BASE = 2n;
+const CANNON_FINISH_GOLD_PER_HITS = 6;
+const RIGGING_FINISH_GOLD_BASE = 3n;
+const RIGGING_FINISH_GOLD_PER_GOOD_TUGS = 5;
+const FIRST_CONTRACT_COLLECTION_BONUS_GOLD = 8n;
+const FIRST_VOYAGE_COLLECTION_BONUS_GOLD = 12n;
+const ARRIVAL_PORT_RESEED_SUGAR = 6n;
+const ARRIVAL_PORT_RESEED_HEMP = 0n;
+const EARLY_GOAL_LONG_HORIZON_MIN_VOYAGES = 3;
 
 const CHART_LOCKED_ROUTE_IDS = new Set(Object.values(CHART_BY_ID).map((c) => c.routeId));
 
@@ -290,7 +306,12 @@ export function getNextGoalsForUi(state: GameState): string[] {
   if (state.mode !== "port") return [];
 
   const goals: string[] = [];
+  const pushGoal = (text: string) => {
+    if (!goals.includes(text)) goals.push(text);
+  };
   const unlocks = new Set(state.unlocks);
+  const shouldShowLongHorizonGoals =
+    state.stats.voyagesStarted >= EARLY_GOAL_LONG_HORIZON_MIN_VOYAGES || unlocks.has("vanity_shop");
   const portId = state.location.islandId;
   const routesFromPort = Object.values(ROUTE_BY_ID).filter((r) => r.fromIslandId === portId && unlocks.has(`route:${r.id}`));
   const startableRoutes = routesFromPort.filter((route) => {
@@ -303,52 +324,155 @@ export function getNextGoalsForUi(state: GameState): string[] {
   const minRouteRumNeeded = routeRequirements.length > 0 ? routeRequirements.reduce((min, req) => (req.totalRum < min ? req.totalRum : min), routeRequirements[0].totalRum) : 0n;
 
   if (!unlocks.has("crew")) {
-    goals.push("Unlock Crew: reach 25 gold.");
+    pushGoal("Unlock Crew: reach 25 gold.");
   } else if (state.crew.hired <= 0) {
-    goals.push("Hire 1–2 crew (wages are a sink; watch your net gold/min).");
+    pushGoal("Hire 1–2 crew (wages are a sink; watch your net gold/min).");
   }
 
   if (!unlocks.has("voyage")) {
-    goals.push("Unlock Voyages: produce any Rum (contracts → distillery).");
+    pushGoal("Unlock Voyages: produce any Rum (contracts → distillery).");
   } else {
     const holdRum = state.storage.shipHold.inv.rum;
     const wh = getWarehouse(state, portId);
     const whRum = wh ? wh.inv.rum : 0n;
+    const whSugar = wh ? wh.inv.sugar : 0n;
+    const sugarContracts = state.economy.contracts.filter(
+      (c) => c.portId === portId && c.commodityId === "sugar" && (c.status === "open" || c.status === "filled")
+    );
+    const collectableSugarContracts = sugarContracts.filter((c) => c.filledQty > c.collectedQty);
     const chartsFromPort = Object.values(CHART_BY_ID).filter((chart) => ROUTE_BY_ID[chart.routeId]?.fromIslandId === portId);
 
     if (state.voyage.status === "completed") {
-      goals.push("Collect your completed voyage to bank rewards and unlock progression.");
+      pushGoal("Collect your completed voyage to bank rewards and unlock progression.");
     } else if (state.voyage.status === "running") {
-      goals.push("Run a minigame during the voyage to bank stronger active bonuses.");
+      pushGoal("Run a minigame during the voyage to bank stronger active bonuses.");
     } else if (routesFromPort.length === 0 && chartsFromPort.length > 0) {
-      goals.push("Buy a chart from this port to open a new route branch.");
+      pushGoal("Buy a chart from this port to open a new route branch.");
     } else if (routesFromPort.length === 0) {
-      goals.push("Use voyages/charts to open another route branch.");
+      pushGoal("Use voyages/charts to open another route branch.");
     } else if (startableRoutes.length <= 0) {
       if (whRum > 0n && minRouteRumNeeded > holdRum) {
-        goals.push(`Load Rum into your hold (need ${minRouteRumNeeded.toString(10)} total).`);
+        pushGoal(`Load Rum into your hold (need ${minRouteRumNeeded.toString(10)} total).`);
+      } else if (whRum <= 0n && collectableSugarContracts.length > 0) {
+        pushGoal("Collect sugar contracts at this port, then distill rum for your next voyage.");
+      } else if (whRum <= 0n && whSugar <= 0n && sugarContracts.length === 0) {
+        pushGoal("Place a sugar contract at this port to restart rum production.");
       } else if (whRum <= 0n) {
-        goals.push("Distill Rum, then load it into your hold to restart voyages.");
+        pushGoal("Distill Rum, then load it into your hold to restart voyages.");
       } else {
-        goals.push("Top up your hold and relaunch voyages.");
+        pushGoal("Top up your hold and relaunch voyages.");
       }
-    } else if (state.stats.voyagesStarted < 3) {
-      goals.push("Run voyages to build influence and unlock midgame systems.");
+    } else {
+      const hasCannonVolley = !!hasBuff(state, "cannon_volley");
+      if (unlocks.has("minigame:cannon") && !hasCannonVolley) {
+        pushGoal("Play Cannon Volley before launching to bank bonus gold and stronger voyage payouts.");
+      }
+      if (state.stats.voyagesStarted < EARLY_GOAL_LONG_HORIZON_MIN_VOYAGES) {
+        pushGoal("Run voyages to build influence and unlock midgame systems.");
+      }
     }
   }
 
   if (!unlocks.has("politics")) {
-    goals.push("Unlock Politics: reach 100 gold or complete Starter Run.");
+    pushGoal("Unlock Politics: reach 100 gold or complete Starter Run.");
   } else if (!unlocks.has("vanity_shop")) {
-    goals.push("Pick a flag and donate to reach 10+ influence (unlocks Vanity Shop + cosmetics chain).");
+    pushGoal("Pick a flag and donate to reach 10+ influence (unlocks Vanity Shop + cosmetics chain).");
   }
 
-  if (state.fleet.maxShips < 3) {
-    goals.push("Upgrade the shipyard to increase fleet capacity.");
+  if (shouldShowLongHorizonGoals && state.fleet.maxShips < 3) {
+    pushGoal("Upgrade the shipyard to increase fleet capacity.");
   }
 
-  if (!unlocks.has("flagship_built")) {
-    goals.push("Build your flagship (3 contributions) for a permanent voyage gold bonus.");
+  if (shouldShowLongHorizonGoals && !unlocks.has("flagship_built")) {
+    pushGoal("Build your flagship (3 contributions) for a permanent voyage gold bonus.");
+  }
+
+  const isMidgame = unlocks.has("voyage") && state.tutorial.stepId === TUTORIAL_STEP_PORT_CORE;
+  if (isMidgame && goals.length < 3) {
+    const controllerFlagId = getPortControllerFlagId(state, portId);
+    const influenceHere = state.politics.influenceByFlagId[controllerFlagId] ?? 0;
+    const taxRelief = getTaxReliefCampaignForUi(portId);
+    if (influenceHere >= taxRelief.requiredInfluence) {
+      if (state.resources.gold >= taxRelief.goldCost) {
+        pushGoal("Run Tax Relief at this port to cut contract fees for the next 10 minutes.");
+      } else {
+        const missing = taxRelief.goldCost - state.resources.gold;
+        pushGoal(`Bank ${missing.toString(10)} more gold to start Tax Relief here.`);
+      }
+    } else {
+      const remainingInfluence = taxRelief.requiredInfluence - influenceHere;
+      pushGoal(`Donate for ${remainingInfluence} more local influence to unlock Tax Relief here.`);
+    }
+  }
+
+  if (isMidgame && goals.length < 3) {
+    const nextShipyardLevel = Math.min(SHIPYARD_MAX_LEVEL, state.shipyard.level + 1);
+    const shipyardCost = getShipyardUpgradeCostForUi(nextShipyardLevel);
+    if (state.shipyard.level < SHIPYARD_MAX_LEVEL) {
+      if (state.resources.gold >= shipyardCost) {
+        pushGoal(`Upgrade Shipyard to level ${nextShipyardLevel} to expand fleet capacity.`);
+      } else {
+        const shortfall = shipyardCost - state.resources.gold;
+        pushGoal(`Save ${shortfall.toString(10)} more gold for Shipyard level ${nextShipyardLevel}.`);
+      }
+    }
+  }
+
+  if (isMidgame && goals.length < 3) {
+    const hasLocalContract = state.economy.contracts.some(
+      (c) => c.portId === portId && (c.status === "open" || c.status === "filled")
+    );
+    if (!hasLocalContract) {
+      pushGoal("Keep at least one local contract open while voyaging to avoid supply stalls.");
+    }
+  }
+
+  const hasConquestWin = state.unlocks.some((id) => id.startsWith("conquest:"));
+  const isLategame =
+    state.shipyard.level >= 2 || state.fleet.ships.length > 0 || state.unlocks.includes("flagship_built") || hasConquestWin;
+  if (isLategame && goals.length < 4) {
+    const fleetShipCount = state.fleet.ships.length;
+    if (state.fleet.maxShips > 2 && fleetShipCount <= 0) {
+      pushGoal("Buy a second ship and assign it an automation route to parallelize voyages.");
+    } else if (state.fleet.maxShips > fleetShipCount + 1 && state.shipyard.level < SHIPYARD_MAX_LEVEL) {
+      pushGoal("Upgrade shipyard to unlock another fleet slot and stack parallel voyage income.");
+    } else {
+      const hasIdleAutoShip = state.fleet.ships.some((ship) => ship.automation.enabled && ship.voyage.status === "idle");
+      if (hasIdleAutoShip) {
+        pushGoal("Idle auto-ship detected: stock local rum/cannonballs to keep automation cycling.");
+      } else if (state.fleet.ships.some((ship) => !ship.automation.enabled)) {
+        pushGoal("Enable automation on another fleet ship to sustain late-game income.");
+      }
+    }
+  }
+
+  if (isLategame && goals.length < 4) {
+    if (!state.unlocks.includes("flagship_built")) {
+      pushGoal("Complete flagship contributions for a permanent voyage multiplier and launch bonus.");
+    } else {
+      pushGoal("Flagship bonus is online: push longer routes and stacked fleet voyages for higher returns.");
+    }
+  }
+
+  if (isLategame && goals.length < 4 && state.unlocks.includes("politics")) {
+    if (state.conquest.status === "running") {
+      pushGoal("Conquest in progress: keep income stable so war-chest recovery does not stall expansion.");
+    } else {
+      const affiliation = state.politics.affiliationFlagId;
+      if (affiliation !== "player") {
+        const availableTargets = Object.values(ISLAND_BY_ID).filter((island) => state.world.controllerByIslandId[island.id] !== affiliation);
+        const canStartTarget = availableTargets.find((island) => {
+          const req = getConquestRequirementsForUi(island.tier);
+          const influence = state.politics.influenceByFlagId[affiliation] ?? 0;
+          return influence >= req.requiredInfluence && state.resources.gold >= req.warChestGold;
+        });
+        if (canStartTarget) {
+          pushGoal(`Launch conquest on ${canStartTarget.name} to secure controller bonuses and victory spoils.`);
+        } else {
+          pushGoal("Bank influence + gold for your next conquest campaign to unlock stronger late-game routing.");
+        }
+      }
+    }
   }
 
   return goals.slice(0, 5);
@@ -455,14 +579,31 @@ export function getRiggingRunRumEfficiencyPctForUi(): number {
 
 export function getPortGoldFlowPerMinForUi(state: GameState): {
   crewTotal: number;
+  shipTotal: number;
   dockGoldPerMin: bigint;
+  grossGoldPerMin: bigint;
   wagesGoldPerMin: bigint;
+  shipUpkeepGoldPerMin: bigint;
+  sinkGoldPerMin: bigint;
   netGoldPerMin: bigint;
 } {
   const crewTotal = state.crew.hired + state.fleet.ships.reduce((acc, s) => acc + s.crew.hired, 0);
+  const shipTotal = 1 + state.fleet.ships.length;
   const dockGoldPerMin = getDockPassiveGoldPerSecForUi(state) * 60n;
   const wagesGoldPerMin = BigInt(crewTotal) * CREW_WAGE_PER_CREW_PER_MIN;
-  return { crewTotal, dockGoldPerMin, wagesGoldPerMin, netGoldPerMin: dockGoldPerMin - wagesGoldPerMin };
+  const shipUpkeepGoldPerMin = state.unlocks.includes("voyage") ? BigInt(shipTotal) * SHIP_UPKEEP_PER_SHIP_PER_MIN : 0n;
+  const grossGoldPerMin = dockGoldPerMin;
+  const sinkGoldPerMin = wagesGoldPerMin + shipUpkeepGoldPerMin;
+  return {
+    crewTotal,
+    shipTotal,
+    dockGoldPerMin,
+    grossGoldPerMin,
+    wagesGoldPerMin,
+    shipUpkeepGoldPerMin,
+    sinkGoldPerMin,
+    netGoldPerMin: grossGoldPerMin - sinkGoldPerMin,
+  };
 }
 
 function collectContractInPlace(state: GameState, contractId: string): { state: GameState; changed: boolean } {
@@ -481,6 +622,8 @@ function collectContractInPlace(state: GameState, contractId: string): { state: 
   const free = wh.cap - used;
   const take = free <= 0n ? 0n : available <= free ? available : free;
   if (take <= 0n) return { state, changed: false };
+  const firstCollectionEver = state.economy.contracts.every((existing) => existing.collectedQty <= 0n);
+  const firstCollectionBonus = firstCollectionEver ? FIRST_CONTRACT_COLLECTION_BONUS_GOLD : 0n;
 
   const nextCollected = c.collectedQty + take >= c.qty ? c.qty : c.collectedQty + take;
   const nextStatus: ContractState["status"] =
@@ -494,7 +637,14 @@ function collectContractInPlace(state: GameState, contractId: string): { state: 
     inv: { ...wh.inv, [c.commodityId]: wh.inv[c.commodityId] + take },
   };
   let nextState: GameState = setWarehouse(state, c.portId, nextWh);
-  nextState = { ...nextState, economy: { ...nextState.economy, contracts: nextContracts } };
+  nextState = {
+    ...nextState,
+    resources:
+      firstCollectionBonus > 0n
+        ? { ...nextState.resources, gold: nextState.resources.gold + firstCollectionBonus }
+        : nextState.resources,
+    economy: { ...nextState.economy, contracts: nextContracts },
+  };
 
   // Trade influence: collecting goods builds influence with the current controller of this port.
   // Smallest slice: +1 influence per 20 units collected (floored).
@@ -566,6 +716,47 @@ function getWarehouse(state: GameState, portId: string): WarehouseState {
 
 function setWarehouse(state: GameState, portId: string, wh: WarehouseState): GameState {
   return { ...state, storage: { ...state.storage, warehouses: { ...state.storage.warehouses, [portId]: wh } } };
+}
+
+function hasUnlockedRouteFromPort(unlocks: string[], portId: string): boolean {
+  for (const route of Object.values(ROUTE_BY_ID)) {
+    if (route.fromIslandId !== portId) continue;
+    if (unlocks.includes(`route:${route.id}`)) return true;
+  }
+  return false;
+}
+
+function maybeGrantArrivalPortReseed(
+  state: GameState,
+  portId: string,
+  unlocksBefore: string[],
+  unlocksAfter: string[]
+): GameState {
+  const hadRouteFromPort = hasUnlockedRouteFromPort(unlocksBefore, portId);
+  const hasRouteFromPort = hasUnlockedRouteFromPort(unlocksAfter, portId);
+  if (hadRouteFromPort || !hasRouteFromPort) return state;
+
+  const wh = getWarehouse(state, portId);
+  if (!wh) return state;
+
+  let free = wh.cap - invUsed(wh.inv);
+  if (free <= 0n) return state;
+
+  const sugarAdd = ARRIVAL_PORT_RESEED_SUGAR <= free ? ARRIVAL_PORT_RESEED_SUGAR : free;
+  free -= sugarAdd;
+  const hempAdd = ARRIVAL_PORT_RESEED_HEMP <= free ? ARRIVAL_PORT_RESEED_HEMP : free;
+
+  if (sugarAdd <= 0n && hempAdd <= 0n) return state;
+
+  const nextWh: WarehouseState = {
+    ...wh,
+    inv: {
+      ...wh.inv,
+      sugar: wh.inv.sugar + sugarAdd,
+      hemp: wh.inv.hemp + hempAdd,
+    },
+  };
+  return setWarehouse(state, portId, nextWh);
 }
 
 function makeInitialWarehouses(): Record<string, WarehouseState> {
@@ -837,15 +1028,15 @@ function tickDockWork(state: GameState, dtMs: number): GameState {
 
 function tickCrewWages(state: GameState, dtMs: number): GameState {
   if (state.mode !== "port") return state;
+  const applyShipUpkeep = state.unlocks.includes("voyage");
 
   const tickOne = (crew: GameState["crew"]) => {
-    const hired = crew.hired;
-    if (hired <= 0) return { crew, pay: 0n, changed: false };
-
     const total = crew.wagesRemainderMs + dtMs;
     const units = Math.floor(total / 60_000);
     const rem = total % 60_000;
-    const pay = units <= 0 ? 0n : BigInt(units) * BigInt(hired) * CREW_WAGE_PER_CREW_PER_MIN;
+    const wagePay = units <= 0 ? 0n : BigInt(units) * BigInt(Math.max(0, crew.hired)) * CREW_WAGE_PER_CREW_PER_MIN;
+    const upkeepPay = units <= 0 || !applyShipUpkeep ? 0n : BigInt(units) * SHIP_UPKEEP_PER_SHIP_PER_MIN;
+    const pay = wagePay + upkeepPay;
     const nextCrew = rem === crew.wagesRemainderMs ? crew : { ...crew, wagesRemainderMs: rem };
     return { crew: nextCrew, pay, changed: nextCrew !== crew || pay !== 0n };
   };
@@ -1251,7 +1442,12 @@ function tickVoyageRuntime(state: GameState, rt: ShipRuntimeState, dtMs: number)
   const fails = nextEncounters.reduce((acc, e) => acc + (e.status === "fail" ? 1 : 0), 0);
   const penaltyPct = Math.min(80, fails * ENCOUNTER_FAIL_GOLD_PENALTY_PCT);
   const reward1 = (reward0 * BigInt(100 - penaltyPct)) / 100n;
-  const reward = reward1;
+  const destinationTier = ISLAND_BY_ID[route.toIslandId]?.tier ?? 1;
+  const voyageDuty = BigInt(Math.max(1, destinationTier)) * VOYAGE_PORT_DUTY_PER_TIER;
+  const reward2 = reward1 > voyageDuty ? reward1 - voyageDuty : 1n;
+  const taxBps = getEffectivePortTaxBps(state, route.toIslandId);
+  const reward3 = taxBps > 0 ? (reward2 * BigInt(10_000 - taxBps)) / 10_000n : reward2;
+  const reward = reward3 > 0n ? reward3 : 1n;
 
   const sailingXpGain = Math.max(1, Math.round(route.durationMs / 1000));
   const gunneryXpGain = nextEncounters.reduce(
@@ -1367,21 +1563,83 @@ function startVoyageRuntime(state: GameState, rt: ShipRuntimeState, routeId: str
   if (!state.unlocks.includes(`route:${route.id}`)) return { state, rt };
   if (route.fromIslandId !== rt.locationId) return { state, rt };
 
-  const req = getVoyageStartRequirements(state, rt.ship.classId, routeId);
-  if (!req) return { state, rt };
-  if (rt.hold.inv.rum < req.totalRum) return { state, rt };
+  // Automation quality-of-life: pre-load missing voyage supplies from the current port warehouse.
+  let nextState = state;
+  let preparedRt = rt;
+  const prepReq = getVoyageStartRequirements(nextState, preparedRt.ship.classId, routeId);
+  if (prepReq) {
+    const wh = getWarehouse(nextState, preparedRt.locationId);
+    if (wh) {
+      const missingRum = prepReq.totalRum > preparedRt.hold.inv.rum ? prepReq.totalRum - preparedRt.hold.inv.rum : 0n;
+      const missingCannonballs =
+        prepReq.expectedCannonballs > preparedRt.hold.inv.cannonballs
+          ? prepReq.expectedCannonballs - preparedRt.hold.inv.cannonballs
+          : 0n;
+      let free = preparedRt.hold.cap - invUsed(preparedRt.hold.inv);
 
-  const nextHold = { ...rt.hold, inv: { ...rt.hold.inv, rum: rt.hold.inv.rum - req.fareRum } };
-  const voyageIndex = state.stats.voyagesStarted + 1;
-  const durationMs = getVoyageDurationMsForUi(state, rt.ship.classId, route.id);
+      const rumTake =
+        missingRum > 0n && free > 0n
+          ? missingRum <= wh.inv.rum
+            ? missingRum <= free
+              ? missingRum
+              : free
+            : wh.inv.rum <= free
+              ? wh.inv.rum
+              : free
+          : 0n;
+      free -= rumTake;
+
+      const cannonTake =
+        missingCannonballs > 0n && free > 0n
+          ? missingCannonballs <= wh.inv.cannonballs
+            ? missingCannonballs <= free
+              ? missingCannonballs
+              : free
+            : wh.inv.cannonballs <= free
+              ? wh.inv.cannonballs
+              : free
+          : 0n;
+
+      if (rumTake > 0n || cannonTake > 0n) {
+        const nextWh: WarehouseState = {
+          ...wh,
+          inv: {
+            ...wh.inv,
+            rum: wh.inv.rum - rumTake,
+            cannonballs: wh.inv.cannonballs - cannonTake,
+          },
+        };
+        nextState = setWarehouse(nextState, preparedRt.locationId, nextWh);
+        preparedRt = {
+          ...preparedRt,
+          hold: {
+            ...preparedRt.hold,
+            inv: {
+              ...preparedRt.hold.inv,
+              rum: preparedRt.hold.inv.rum + rumTake,
+              cannonballs: preparedRt.hold.inv.cannonballs + cannonTake,
+            },
+          },
+        };
+      }
+    }
+  }
+
+  const req = getVoyageStartRequirements(nextState, preparedRt.ship.classId, routeId);
+  if (!req) return { state, rt };
+  if (preparedRt.hold.inv.rum < req.totalRum) return { state: nextState, rt: preparedRt };
+
+  const nextHold = { ...preparedRt.hold, inv: { ...preparedRt.hold.inv, rum: preparedRt.hold.inv.rum - req.fareRum } };
+  const voyageIndex = nextState.stats.voyagesStarted + 1;
+  const durationMs = getVoyageDurationMsForUi(nextState, preparedRt.ship.classId, route.id);
   const encounters = makeVoyageEncounters({
-    seed: state.settings.seed,
+    seed: nextState.settings.seed,
     routeId: route.id,
     voyageIndex,
     durationMs,
   });
   const nextRt: ShipRuntimeState = {
-    ...rt,
+    ...preparedRt,
     hold: nextHold,
     voyage: {
       status: "running",
@@ -1395,8 +1653,8 @@ function startVoyageRuntime(state: GameState, rt: ShipRuntimeState, routeId: str
       encounters,
     },
   };
-  const nextState: GameState = { ...state, stats: { ...state.stats, voyagesStarted: voyageIndex } };
-  return { state: nextState, rt: nextRt };
+  const startedState: GameState = { ...nextState, stats: { ...nextState.stats, voyagesStarted: voyageIndex } };
+  return { state: startedState, rt: nextRt };
 }
 
 function collectVoyageRuntime(state: GameState, rt: ShipRuntimeState): { state: GameState; rt: ShipRuntimeState } {
@@ -1405,21 +1663,24 @@ function collectVoyageRuntime(state: GameState, rt: ShipRuntimeState): { state: 
   if (!routeId) {
     return { state, rt: { ...rt, voyage: makeIdleVoyageState() } };
   }
-  const nextUnlocks = applyVoyageCollectUnlocks(state.unlocks, routeId, rt.locationId);
+  const unlocksBefore = state.unlocks;
+  const nextUnlocks = applyVoyageCollectUnlocks(unlocksBefore, routeId, rt.locationId);
 
   const controllerFlagId = getPortControllerFlagId(state, rt.locationId) ?? state.politics.affiliationFlagId;
   const nextInfluenceByFlagId = {
     ...state.politics.influenceByFlagId,
     [controllerFlagId]: (state.politics.influenceByFlagId[controllerFlagId] ?? 0) + rt.voyage.pendingInfluence,
   };
+  const firstVoyageCollectBonus = state.stats.voyagesStarted === 1 ? FIRST_VOYAGE_COLLECTION_BONUS_GOLD : 0n;
 
   const nextState0: GameState = {
     ...state,
-    resources: { ...state.resources, gold: state.resources.gold + rt.voyage.pendingGold },
+    resources: { ...state.resources, gold: state.resources.gold + rt.voyage.pendingGold + firstVoyageCollectBonus },
     politics: { ...state.politics, influenceByFlagId: nextInfluenceByFlagId },
     unlocks: nextUnlocks,
   };
-  const nextState = maybeUnlockCosmeticsChain(nextState0);
+  const nextState1 = maybeGrantArrivalPortReseed(nextState0, rt.locationId, unlocksBefore, nextUnlocks);
+  const nextState = maybeUnlockCosmeticsChain(nextState1);
 
   return { state: nextState, rt: { ...rt, voyage: makeIdleVoyageState() } };
 }
@@ -1531,11 +1792,20 @@ function tickConquest(state: GameState, dtMs: number): GameState {
 
   const target = c.targetIslandId;
   const attacker = c.attackerFlagId;
+  const targetTier = ISLAND_BY_ID[target]?.tier ?? 1;
+  const victoryGold = BigInt(targetTier) * CONQUEST_SUCCESS_GOLD_PER_TIER;
+  const victoryInfluence = targetTier * CONQUEST_SUCCESS_INFLUENCE_PER_TIER;
+  const nextInfluenceByFlagId = {
+    ...state.politics.influenceByFlagId,
+    [attacker]: (state.politics.influenceByFlagId[attacker] ?? 0) + victoryInfluence,
+  };
   const nextControllers = { ...state.world.controllerByIslandId, [target]: attacker };
   const nextUnlocks = state.unlocks.includes(`conquest:${target}`) ? state.unlocks : [...state.unlocks, `conquest:${target}`];
   return {
     ...state,
+    resources: { ...state.resources, gold: state.resources.gold + victoryGold },
     world: { ...state.world, controllerByIslandId: nextControllers },
+    politics: { ...state.politics, influenceByFlagId: nextInfluenceByFlagId },
     unlocks: nextUnlocks,
     conquest: { ...c, status: "success", remainingMs: 0, stage: 3 },
   };
@@ -1555,6 +1825,7 @@ function tickCannonMinigame(state: GameState, dtMs: number): GameState {
   const tierBonus = hits >= 12 ? 180_000 : hits >= 6 ? 60_000 : 0;
   const buffMs = CANNON_BUFF_MS + tierBonus;
   const powerBps = hits >= 12 ? 13_500 : hits >= 6 ? 12_000 : 11_000;
+  const goldBonus = CANNON_FINISH_GOLD_BASE + BigInt(Math.floor(hits / CANNON_FINISH_GOLD_PER_HITS));
   let nextState: GameState = {
     ...state,
     minigames: { ...state.minigames, cannon: { ...mg, status: "finished", elapsedMs: mg.durationMs } },
@@ -1562,6 +1833,7 @@ function tickCannonMinigame(state: GameState, dtMs: number): GameState {
   nextState = upsertBuff(nextState, { id: "cannon_volley", remainingMs: buffMs, powerBps });
   nextState = {
     ...nextState,
+    resources: { ...nextState.resources, gold: nextState.resources.gold + goldBonus },
     crew: {
       ...nextState.crew,
       skills: { ...nextState.crew.skills, gunneryXp: nextState.crew.skills.gunneryXp + hits },
@@ -1582,6 +1854,7 @@ function tickRiggingMinigame(state: GameState, dtMs: number): GameState {
   const good = mg.goodTugs;
   const tierBonus = good >= 12 ? 180_000 : good >= 6 ? 60_000 : 0;
   const buffMs = RIGGING_BUFF_MS + tierBonus;
+  const goldBonus = RIGGING_FINISH_GOLD_BASE + BigInt(Math.floor(good / RIGGING_FINISH_GOLD_PER_GOOD_TUGS));
 
   let nextState: GameState = {
     ...state,
@@ -1590,6 +1863,7 @@ function tickRiggingMinigame(state: GameState, dtMs: number): GameState {
   nextState = upsertBuff(nextState, { id: "rigging_run", remainingMs: buffMs });
   nextState = {
     ...nextState,
+    resources: { ...nextState.resources, gold: nextState.resources.gold + goldBonus },
     crew: {
       ...nextState.crew,
       skills: { ...nextState.crew.skills, sailingXp: nextState.crew.skills.sailingXp + good },
@@ -1806,8 +2080,16 @@ export function applyAction(state: GameState, action: GameAction): GameState {
     case "DOCK_WORK_START": {
       if (state.mode !== "port") return state;
       if (state.dock.workRemainingMs > 0) {
+        const freshShiftHustle = state.dock.workRemainingMs === DOCK_WORK_DURATION_MS;
         const reduced = Math.max(1, state.dock.workRemainingMs - DOCK_WORK_HUSTLE_REDUCE_MS);
-        return { ...state, dock: { ...state.dock, workRemainingMs: reduced } };
+        return {
+          ...state,
+          resources:
+            freshShiftHustle
+              ? { ...state.resources, gold: state.resources.gold + DOCK_WORK_HUSTLE_BONUS_GOLD }
+              : state.resources,
+          dock: { ...state.dock, workRemainingMs: reduced },
+        };
       }
       return {
         ...state,
@@ -2181,30 +2463,22 @@ export function applyAction(state: GameState, action: GameAction): GameState {
     case "VOYAGE_COLLECT": {
       if (state.mode !== "port") return state;
       if (state.voyage.status !== "completed") return state;
-      const routeId = state.voyage.routeId;
-      const nextUnlocks = routeId ? applyVoyageCollectUnlocks(state.unlocks, routeId, state.location.islandId) : state.unlocks;
-      const controllerFlagId = getPortControllerFlagId(state, state.location.islandId) ?? state.politics.affiliationFlagId;
-      const nextInfluenceByFlagId = {
-        ...state.politics.influenceByFlagId,
-        [controllerFlagId]: (state.politics.influenceByFlagId[controllerFlagId] ?? 0) + state.voyage.pendingInfluence,
+      const runtime: ShipRuntimeState = {
+        locationId: state.location.islandId,
+        ship: state.ship,
+        crew: state.crew,
+        hold: state.storage.shipHold,
+        voyage: state.voyage,
       };
-      return maybeUnlockCosmeticsChain({
-        ...state,
-        resources: { ...state.resources, gold: state.resources.gold + state.voyage.pendingGold },
-        politics: { ...state.politics, influenceByFlagId: nextInfluenceByFlagId },
-        unlocks: nextUnlocks,
-        voyage: {
-          status: "idle",
-          routeId: null,
-          fromIslandId: null,
-          toIslandId: null,
-          remainingMs: 0,
-          durationMs: 0,
-          pendingGold: 0n,
-          pendingInfluence: 0,
-          encounters: [],
-        },
-      });
+      const collected = collectVoyageRuntime(state, runtime);
+      return {
+        ...collected.state,
+        location: { islandId: collected.rt.locationId },
+        ship: collected.rt.ship,
+        crew: collected.rt.crew,
+        storage: { ...collected.state.storage, shipHold: collected.rt.hold },
+        voyage: collected.rt.voyage,
+      };
     }
     case "SHIP_REPAIR": {
       if (state.mode !== "port") return state;
@@ -2430,7 +2704,21 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       };
 
       if (nextProgress >= nextState.flagship.required && !nextState.unlocks.includes("flagship_built")) {
-        nextState = { ...nextState, unlocks: [...nextState.unlocks, "flagship_built"] };
+        const affiliation = nextState.politics.affiliationFlagId;
+        const nextInfluenceByFlagId =
+          affiliation === "player"
+            ? nextState.politics.influenceByFlagId
+            : {
+                ...nextState.politics.influenceByFlagId,
+                [affiliation]:
+                  (nextState.politics.influenceByFlagId[affiliation] ?? 0) + FLAGSHIP_COMPLETION_INFLUENCE_REWARD,
+              };
+        nextState = {
+          ...nextState,
+          resources: { ...nextState.resources, gold: nextState.resources.gold + FLAGSHIP_COMPLETION_GOLD_REWARD },
+          politics: { ...nextState.politics, influenceByFlagId: nextInfluenceByFlagId },
+          unlocks: [...nextState.unlocks, "flagship_built"],
+        };
       }
       return nextState;
     }

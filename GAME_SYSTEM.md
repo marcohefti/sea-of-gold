@@ -58,6 +58,7 @@ Tutorial progression:
   - immediate reward on click: `+1 gold`
   - completion reward: `+4 gold`
   - while running, click Hustle reduces remaining time by `500ms`.
+  - first hustle click in a fresh shift grants `+1 gold` (active micro-optimization).
 - Dock automation:
   - cost: `30 gold`
   - enables passive income: `1 gold/sec`.
@@ -77,6 +78,7 @@ Tutorial progression:
 - Collection:
   - goods transfer into current port warehouse (capped by free space)
   - no silent loss; uncollected quantity remains on contract.
+  - first contract collection grants a one-time `+8 gold` early momentum bonus.
 - Influence from trade:
   - collecting contracts grants `+1 influence per 20 units` (floored) with current controller.
 
@@ -111,6 +113,11 @@ Recipes are data-driven (`recipes.json`), deterministic, and warehouse-cap aware
   - if cannonballs available: success, consume cost
   - else: fail, apply condition damage and voyage reward penalty.
 - Voyage completion yields pending gold + influence, collected via `VOYAGE_COLLECT`.
+- First voyage collection grants a one-time `+12 gold` momentum bonus (manual and automation collections both apply it).
+- First arrival at a newly unlocked departure port grants a one-time local reseed package (`+6 sugar`, capacity-capped) to reduce post-arrival deadlock.
+- Voyage payout sink model:
+  - destination port duty: `2 gold * destination island tier`
+  - destination tax applies to voyage payout after duty (using current effective tax).
 
 ### Ship Condition And Repair
 
@@ -123,6 +130,7 @@ Recipes are data-driven (`recipes.json`), deterministic, and warehouse-cap aware
 
 - Hire cost: `25 gold` per crew.
 - Wage drain: `1 gold/min` per crew (active ship + fleet ships).
+- Ship upkeep drain: `1 gold/min` per ship after voyages are unlocked.
 - XP gain:
   - sailing XP from voyage duration
   - gunnery XP from encounters and cannon minigame hits.
@@ -136,15 +144,17 @@ Cannon Volley:
   - base: +10% voyage gold for 5m
   - >=6 hits: +20% and +60s
   - >=12 hits: +35% and +180s
+- completion payout: `2 gold + floor(hits / 6)` (banked immediate value).
 - replay blocked if existing buff remaining >= 60s.
 
 Rigging Run:
 - duration: `30s`
 - deterministic moving window + seeded zone start
 - grants `rigging_run` buff:
-  - baseline rum burn reduction: `25%`
-  - voyage speed bonus: `10%`
+  - baseline rum burn reduction: `30%`
+  - voyage speed bonus: `15%`
   - base 5m duration with tiered duration extensions
+- completion payout: `3 gold + floor(goodTugs / 5)` (banked immediate value).
 - replay blocked if existing buff remaining >= 60s.
 
 ### Shipyard, Fleet, Flagship
@@ -153,14 +163,16 @@ Rigging Run:
   - Sloop (starter), Brig, Galleon.
 - Shipyard:
   - level starts at 1, max 4
-  - upgrade cost = `300 gold * nextLevel`
+  - upgrade cost = `250 gold * nextLevel`
   - each level increases fleet cap by 1 (up to 5 total ships).
 - Fleet automation:
   - per-ship route selection + auto-start + optional auto-collect.
+  - auto ships pre-load missing rum/cannonballs from their local warehouse before launch (capacity-capped).
 - Flagship project:
   - 3 contributions required
   - each contribution costs `200 gold + 5 cosmetics`
   - completion unlocks permanent `+20% voyage gold`.
+  - completion grants a one-time launch bonus: `+120 gold` and `+5` influence with your affiliated flag (if selected).
 
 ### Politics And Conquest
 
@@ -180,6 +192,7 @@ Conquest campaign:
 - war chest cost `200 gold * island tier`
 - duration `3 * 60s` stages
 - on success, port controller flips to attacker flag.
+- conquest victory spoils: `+60 gold * island tier` and `+4 influence * island tier` to attacker.
 
 ### Vanity (Cosmetic Sinks With Utility)
 
@@ -243,3 +256,72 @@ Late game:
 - Never rename stable IDs/selectors without migration and acceptance updates.
 - All balancing or design changes must preserve deterministic replay and save compatibility.
 - Any autonomous design decision must be logged in `STATE_SNAPSHOT.md` with rationale.
+
+## 10) Economy Design Contract (Research-Backed)
+
+This section is a balancing contract for future economy/content changes. It does not override acceptance criteria; it defines how new economy features should be shaped.
+
+### Economy Graph Rules
+
+- Model every economy addition as a combination of:
+  - faucet (resource source)
+  - transformer (recipe or conversion)
+  - router (voyages/contracts deciding destination/value)
+  - buffer (warehouse/hold capacity)
+  - sink (upkeep, fees, upgrades, campaigns, vanity, repairs)
+- Every new faucet should ship with at least one visible sink or capacity pressure in the same phase.
+- Prefer strategic sinks (tradeoffs and routing decisions) over pure deletion sinks.
+
+### Pacing Bands (Target)
+
+- Early game: `10-60s` to meaningful upgrade/unlock.
+- Mid game: `2-10m` between meaningful economy beats.
+- Late game: `30-120m` for long projects (fleet/flagship/conquest-scale goals).
+- Keep at least two visible next-goal options when possible to avoid single-path stalls.
+
+### Scaling And Multiplier Guardrails
+
+- Use geometric scaling for major costs.
+- Keep multiplier stacking controlled:
+  - avoid adding more than two multiplicative boosts in the same value lane
+  - prefer additive bonuses when layering systems in the same phase
+- When adding a permanent multiplier, add or strengthen at least one sink/cap in that phase.
+
+### Inflation And Sink Coverage Guardrails
+
+- Treat economy health as `gross production - sink pressure`.
+- Midgame target: sustain visible sink pressure (wages, tax, repairs, upgrades, campaigns, logistics limits) so growth remains decision-driven.
+- If net value growth outruns target pacing bands, add sink/cap pressure before adding new generators.
+
+### Active Versus Idle Harmony
+
+- Idle must remain viable for core progression.
+- Active play should accelerate outcomes without invalidating idle:
+  - target burst leverage roughly `1.5x-3x` equivalent idle interval value
+  - reward active play via banked or time-boxed effects
+- Avoid buff designs that are silently wasted because of full storage/hold state.
+
+### Offline And Save Trust
+
+- Offline progress must be deterministic from explicit time delta and deterministic state.
+- Offline payout messaging should expose gains and bottlenecks (caps/blocked transfers) clearly.
+- Save payload should always preserve simulation time and RNG continuation state.
+
+### Prestige/Reset Policy (When Introduced)
+
+- Resets should unlock new decisions/automation layers, not just larger numbers.
+- First reset target window should be in the long-session band (roughly `30-90m`), not the tutorial window.
+- Reset rewards must preserve deterministic replay and save migration safety.
+
+### Research Anchors
+
+- Kongregate idle math balancing:
+  - <https://blog.kongregate.com/the-math-of-idle-games-part-i/>
+  - <https://blog.kongregate.com/the-math-of-idle-games-part-ii/>
+  - <https://blog.kongregate.com/the-math-of-idle-games-part-iii/>
+- Value-chain and sink framing:
+  - <https://lostgarden.home.blog/2021/12/12/value-chains/>
+- Virtual economy inflation/hoarding risks:
+  - <https://econpapers.repec.org/RePEc:wsi:igtrxx:v:05:y:2006:i:03:n:s0219198906000987>
+- Idle game player behavior taxonomy:
+  - <https://dl.acm.org/doi/10.1145/3311350.3347183>

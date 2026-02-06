@@ -259,102 +259,150 @@ function PortPerkPill({ perk }: { perk: { id: string; remainingMs: number; taxDi
 function TitleScreen({
   onStart,
   onImport,
+  debugUi,
 }: {
   onStart: () => void;
   onImport: (save: string) => void;
+  debugUi: boolean;
 }) {
   const fixtureKeys = Object.keys(SAVE_FIXTURES);
   const [fixtureKey, setFixtureKey] = React.useState(fixtureKeys[0] || "save_fresh");
   const [saveText, setSaveText] = React.useState("");
+  const [showImportTools, setShowImportTools] = React.useState(debugUi);
+
+  React.useEffect(() => {
+    if (debugUi) setShowImportTools(true);
+  }, [debugUi]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-950 to-black text-zinc-100">
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 py-10">
-        <div className="w-full max-w-xl">
+      <div className="mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-6 py-10">
+        <div className="w-full max-w-4xl">
           <div className="mb-4 flex items-center gap-4">
             <HarborSigil className="sog-animate-float" />
             <div className="sog-kicker">Deterministic Captaincy</div>
           </div>
-          <h1 className="text-4xl font-semibold tracking-tight">Sea of Gold</h1>
-          <p className="mt-3 text-sm leading-6 text-zinc-400">
-            Single-player idle captaincy. Deterministic simulation. Voyages soon.
+          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Sea of Gold</h1>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-300 md:text-base">
+            Build a pirate trade network by balancing contracts, logistics, voyages, and politics. Idle progress keeps moving;
+            active play sharpens your route profits.
           </p>
 
-          <div className="mt-8 flex items-center gap-3">
-            <Button data-testid="start-new-game" onClick={onStart}>
-              <Compass aria-hidden="true" className="h-4 w-4" />
-              Start New Game
-            </Button>
-            <div className="text-xs text-zinc-500">
-              Harness API v{IDLE_API_VERSION}
-            </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-[1.4fr_1fr]">
+            <Card className="sog-surface border-zinc-800 bg-zinc-950/85 text-zinc-100">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Compass aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-accent)]" />
+                  Current Release
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-1 text-sm text-zinc-300">
+                  <div>1. Work docks and buy automation.</div>
+                  <div>2. Place contracts and convert goods into supplies.</div>
+                  <div>3. Run voyages, apply buffs, and expand your economy.</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button data-testid="start-new-game" onClick={onStart}>
+                    <Compass aria-hidden="true" className="h-4 w-4" />
+                    Start New Game
+                  </Button>
+                  <div className="text-xs text-zinc-400">First meaningful unlock in about 30-90s.</div>
+                </div>
+                {debugUi ? (
+                  <div className="text-xs text-zinc-500">Harness API v{IDLE_API_VERSION}</div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card className="border-zinc-800 bg-zinc-950/70 text-zinc-100">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sailboat aria-hidden="true" className="h-4 w-4 text-[color:var(--sog-info)]" />
+                  How To Start
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2 text-sm text-zinc-300">
+                <div>Keep warehouse and hold capacity in view.</div>
+                <div>Prioritize voyages when rum and crew are ready.</div>
+                <div>Use minigames before high-value runs.</div>
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="mt-10 grid gap-3">
-            <Card className="border-zinc-800 bg-zinc-950 text-zinc-100">
-              <CardHeader>
-                <CardTitle>Milestone 1</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-zinc-300">
-                Dock income, contracts, and the Cannon Volley minigame.
-              </CardContent>
-            </Card>
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-xs text-zinc-500">Save / fixture import tools</div>
+              {!debugUi ? (
+                <Button
+                  data-testid="toggle-import-tools"
+                  variant="secondary"
+                  className="h-8 bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
+                  onClick={() => setShowImportTools((v) => !v)}
+                >
+                  {showImportTools ? "Hide Tools" : "Load Existing Save"}
+                </Button>
+              ) : null}
+            </div>
 
-            <Card className="border-zinc-800 bg-zinc-950 text-zinc-100">
-              <CardHeader>
-                <CardTitle>Import Save</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="text-xs text-zinc-500">
-                  Paste a save payload (JSON) and import. For automated tests, you can also load a fixture.
-                </div>
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="min-w-[220px] flex-1">
-                    <label className="mb-1 block text-xs text-zinc-400">Fixture</label>
-                    <select
-                      data-testid="fixture-select"
-                      className="h-9 w-full rounded-md border border-zinc-800 bg-black px-3 text-sm text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/30"
-                      value={fixtureKey}
-                      onChange={(e) => setFixtureKey(e.target.value)}
-                    >
-                      {fixtureKeys.map((k) => (
-                        <option key={k} value={k}>
-                          {k}
-                        </option>
-                      ))}
-                    </select>
+            {(debugUi || showImportTools) ? (
+              <Card className="border-zinc-800 bg-zinc-950 text-zinc-100">
+                <CardHeader>
+                  <CardTitle>Import Save</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  <div className="text-xs text-zinc-500">
+                    Paste a save payload (JSON) and import. For automated tests, you can also load a fixture.
                   </div>
-                  <Button
-                    data-testid="fixture-load"
-                    variant="secondary"
-                    className="bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
-                    onClick={() => setSaveText(SAVE_FIXTURES[fixtureKey]?.save ?? "")}
-                  >
-                    Load Fixture
-                  </Button>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-zinc-400">Save JSON</label>
-                  <textarea
-                    data-testid="save-import-input"
-                    value={saveText}
-                    onChange={(e) => setSaveText(e.target.value)}
-                    spellCheck={false}
-                    className="h-32 w-full resize-none rounded-md border border-zinc-800 bg-black px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/30"
-                    placeholder='{"version":"0.1.0","rng":...,"state":...}'
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs text-zinc-500">Imports are versioned and migrated on load.</div>
-                  <Button
-                    data-testid="save-import-submit"
-                    disabled={!saveText.trim()}
-                    onClick={() => onImport(saveText)}
-                  >
-                    Import
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-[220px] flex-1">
+                      <label className="mb-1 block text-xs text-zinc-400">Fixture</label>
+                      <select
+                        data-testid="fixture-select"
+                        className="h-9 w-full rounded-md border border-zinc-800 bg-black px-3 text-sm text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/30"
+                        value={fixtureKey}
+                        onChange={(e) => setFixtureKey(e.target.value)}
+                      >
+                        {fixtureKeys.map((k) => (
+                          <option key={k} value={k}>
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button
+                      data-testid="fixture-load"
+                      variant="secondary"
+                      className="bg-zinc-950 text-zinc-100 hover:bg-zinc-900"
+                      onClick={() => setSaveText(SAVE_FIXTURES[fixtureKey]?.save ?? "")}
+                    >
+                      Load Fixture
+                    </Button>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-zinc-400">Save JSON</label>
+                    <textarea
+                      data-testid="save-import-input"
+                      value={saveText}
+                      onChange={(e) => setSaveText(e.target.value)}
+                      spellCheck={false}
+                      className="h-32 w-full resize-none rounded-md border border-zinc-800 bg-black px-3 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/30"
+                      placeholder='{"version":"0.1.0","rng":...,"state":...}'
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-zinc-500">Imports are versioned and migrated on load.</div>
+                    <Button
+                      data-testid="save-import-submit"
+                      disabled={!saveText.trim()}
+                      onClick={() => onImport(saveText)}
+                    >
+                      Import
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
           </div>
         </div>
       </div>
@@ -3374,7 +3422,7 @@ export default function GameClient() {
   };
 
   if (state.mode === "title") {
-    return <TitleScreen onStart={startNewGame} onImport={importSaveFromTitle} />;
+    return <TitleScreen onStart={startNewGame} onImport={importSaveFromTitle} debugUi={debugUi} />;
   }
 
   const portId = state.location.islandId;
